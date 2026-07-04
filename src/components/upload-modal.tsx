@@ -80,7 +80,12 @@ function StepIndicator({
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export function UploadModal() {
+interface UploadModalProps {
+  /** Optional custom trigger element. Defaults to the built-in "Add document" button. */
+  trigger?: React.ReactNode;
+}
+
+export function UploadModal({ trigger }: UploadModalProps = {}) {
   const router = useRouter();
   const supabase = getBrowserSupabase();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -245,12 +250,18 @@ export function UploadModal() {
         if (!v) resetModal();
       }}
     >
-      <DialogTrigger
-        render={<Button className="bg-sage text-white hover:bg-sage/90" />}
-      >
-        <UploadCloud className="mr-2 h-4 w-4" />
-        Add Memory
-      </DialogTrigger>
+      {/* Use the custom trigger if provided, otherwise fall back to the default button.
+          DialogTrigger uses render= pattern; wrap custom triggers in a span. */}
+      {trigger ? (
+        <DialogTrigger render={<span />}>{trigger}</DialogTrigger>
+      ) : (
+        <DialogTrigger
+          render={<Button className="bg-sage text-white hover:bg-sage/90" />}
+        >
+          <UploadCloud className="mr-2 h-4 w-4" />
+          Add Memory
+        </DialogTrigger>
+      )}
 
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>

@@ -1,16 +1,10 @@
-// The home of the dashboard, reached from the "Memory Graph" nav item.
-// It greets the user, then shows their health knowledge graph. If they have
-// no memories yet, it shows a friendly empty state with an upload call-to-action.
-//
-// IMPORTANT: This component fetches data through our API route (/api/memories)
-// instead of querying Supabase directly. This avoids 403 Forbidden errors.
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
 import { getBrowserSupabase } from "@/lib/supabase-client";
 import { MemoryGraph } from "@/components/memory-graph";
 import { UploadModal } from "@/components/upload-modal";
+import { Brain, Network, Plus } from "lucide-react";
 import type { HealthEntity, Memory } from "@/types";
 
 export default function DashboardPage() {
@@ -22,88 +16,128 @@ export default function DashboardPage() {
 
   useEffect(() => {
     async function load() {
-      // Find out the user's name for a personal greeting.
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       const fullName = (user?.user_metadata?.full_name as string) ?? "";
       setFirstName(fullName.split(" ")[0] ?? "");
 
-      // Get the session so we can send the access token to the API
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) { setLoading(false); return; }
 
-      if (!session) {
-        setLoading(false);
-        return;
-      }
-
-      // Load this user's memories through the API route instead of direct query
-      console.log("[Dashboard] Fetching memories from API...");
       try {
-        const response = await fetch("/api/memories", {
-          headers: {
-            Authorization: `Bearer ${session.access_token}`,
-          },
+        const res = await fetch("/api/memories", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
         });
-
-        if (response.ok) {
-          const data = await response.json();
-          console.log(`[Dashboard] ✓ Loaded ${data.memories.length} memories`);
+        if (res.ok) {
+          const data = await res.json();
           setMemories((data.memories as Memory[]) ?? []);
-        } else {
-          console.error("[Dashboard] Failed to fetch memories:", response.status);
         }
-      } catch (error) {
-        console.error("[Dashboard] Error fetching memories:", error);
+      } catch {
+        // Non-fatal — graph renders with no data.
       }
-
       setLoading(false);
     }
     load();
   }, [supabase]);
 
-  // Flatten every memory's entities into one list to feed the graph.
-  const allEntities: HealthEntity[] = memories.flatMap(
-    (memory) => memory.entities ?? []
-  );
-
+  const allEntities: HealthEntity[] = memories.flatMap((m) => m.entities ?? []);
   const hasMemories = memories.length > 0;
 
-  return (
-    <div className="flex h-full flex-col gap-4 p-6">
-      {/* Greeting */}
-      <motion.div
-        initial={{ opacity: 0, y: -8 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        <h1 className="font-heading text-3xl font-bold text-charcoal">
-          {firstName ? `Welcome back, ${firstName}` : "Welcome to Cognure"}
-        </h1>
-        <p className="mt-1 text-muted-foreground">
-          This is your living health memory. Explore the connections below.
-        </p>
-      </motion.div>
+  // Quick stats for the summary bar.
+  const stats = {
+    memories: memories.length,
+    entities: allEntities.length,
+    medications: allEntities.filter((e) => e.type === "medication").length,
+    diagnoses: allEntities.filter((e) => e.type === "diagnosis").length,
+  };
 
-      {/* Empty state hint shown when there are no memories yet. */}
-      {!loading && !hasMemories && (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed bg-card/60 p-6 text-center">
-          <p className="font-medium text-charcoal">
-            You haven&apos;t added any memories yet
-          </p>
-          <p className="max-w-md text-sm text-muted-foreground">
-            Upload a health document to start building your graph. The example
-            below shows what your memory could look like.
-          </p>
+  return (
+    <div className="flex h-full flex-col gap-0">
+      {/* Page header */}
+      <div className="border-b border-border bg-card px-6 py-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="font-heading text-2xl font-bold text-charcoal">
+              {firstName ? `Good to see you, ${firstName}` : "Memory Graph"}
+            </h1>
+            <p className="mt-0.5 text-sm text-charcoal/50">
+              {hasMemories
+                ? "Your health knowledge graph — click any node to explore."
+                : "Upload a document to start building your graph."}
+            </p>
+          </div>
           <UploadModal />
         </div>
-      )}
 
-      {/* The graph fills the remaining space. */}
-      <div className="min-h-[480px] flex-1">
-        <MemoryGraph entities={hasMemories ? allEntities : undefined} />
+        {/* Quick stats — only show when there's data */}
+        {hasMemories && !loading && (
+          <div className="mt-4 flex flex-wrap gap-3">
+            <StatPill label="Memories" value={stats.memories} />
+            <StatPill label="Entities" value={stats.entities} />
+            <StatPill label="Medications" value={stats.medications} />
+            <StatPill label="Diagnoses" value={stats.diagnoses} />
+          </div>
+        )}
       </div>
+
+      {/* Graph area */}
+      <div className="relative flex-1 min-h-0">
+        {/* Loading skeleton */}
+        {loading && (
+          <div className="flex h-full items-center justify-center">
+            <div className="flex flex-col items-center gap-3">
+              <Brain className="h-8 w-8 animate-pulse text-sage" />
+              <p className="text-sm text-charcoal/40">Loading your memory graph…</p>
+            </div>
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && !hasMemories && (
+          <div className="flex h-full items-center justify-center px-6">
+            <div className="max-w-sm text-center">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-sage/10">
+                <Network className="h-8 w-8 text-sage" />
+              </div>
+              <h2 className="font-heading text-xl font-bold text-charcoal">
+                Your graph is empty
+              </h2>
+              <p className="mt-2 text-sm leading-relaxed text-charcoal/50">
+                Upload a medical document — a lab report, prescription, or
+                discharge summary — and Cognure will extract your health
+                entities automatically.
+              </p>
+              <div className="mt-6">
+                <UploadModal
+                  trigger={
+                    <button className="inline-flex items-center gap-2 rounded-xl bg-sage px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-sage/90">
+                      <Plus className="h-4 w-4" />
+                      Upload your first document
+                    </button>
+                  }
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* The graph */}
+        {!loading && (
+          <div className="h-full">
+            <MemoryGraph entities={hasMemories ? allEntities : undefined} />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function StatPill({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex items-center gap-1.5 rounded-full border border-border bg-background px-3 py-1 text-xs">
+      <span className="font-bold text-charcoal">{value}</span>
+      <span className="text-charcoal/45">{label}</span>
     </div>
   );
 }
