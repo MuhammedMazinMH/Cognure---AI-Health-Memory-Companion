@@ -1,30 +1,5 @@
-// POLYFILL: DOMMatrix is required by pdf-parse but missing in Node.js serverless
-if (typeof globalThis.DOMMatrix === "undefined") {
-  class DOMMatrixPolyfill {
-    a = 1; b = 0; c = 0; d = 1; e = 0; f = 0;
-    m11 = 1; m12 = 0; m13 = 0; m14 = 0;
-    m21 = 0; m22 = 1; m23 = 0; m24 = 0;
-    m31 = 0; m32 = 0; m33 = 1; m34 = 0;
-    m41 = 0; m42 = 0; m43 = 0; m44 = 1;
-
-    constructor(init?: string | number[]) {
-      if (Array.isArray(init)) {
-        [this.a, this.b, this.c, this.d, this.e, this.f] = init;
-      }
-    }
-    multiply() { return new DOMMatrixPolyfill(); }
-    translate() { return new DOMMatrixPolyfill(); }
-    scale() { return new DOMMatrixPolyfill(); }
-    rotate() { return new DOMMatrixPolyfill(); }
-    toString() { return "matrix(1, 0, 0, 1, 0, 0)"; }
-  }
-
-  // Type-safe way to attach DOMMatrix to globalThis without using 'any'
-  interface GlobalWithDOMMatrix {
-    DOMMatrix: typeof DOMMatrixPolyfill;
-  }
-  (globalThis as unknown as GlobalWithDOMMatrix).DOMMatrix = DOMMatrixPolyfill;
-}
+// MUST be first — polyfill browser APIs before pdf-parse loads.
+import "@/lib/pdf-polyfill";
 
 // POST /api/upload
 // Accepts a single file (PDF or TXT), extracts its text, uploads the original
