@@ -1,65 +1,18 @@
-// MUST be first — polyfill browser APIs before any PDF library loads.
-import "@/lib/pdf-polyfill";
-
 // POST /api/upload
-// Accepts a single file (PDF or TXT), extracts its text, uploads the original
-// file to Supabase Storage, and saves a row in the `documents` table.
+// Accepts a file (PDF or TXT) plus optional pre-extracted text (for PDFs
+// that were parsed on the client with pdfjs-dist).  Uploads the original
+// file to Supabase Storage and saves a row in the `documents` table.
+//
+// PDF text extraction is intentionally done CLIENT-SIDE (see
+// src/lib/pdf-extract.ts) to avoid pdfjs-dist worker issues on Vercel
+// serverless. The client sends the extracted text in the `content` field
+// of the FormData, so this route never needs to parse PDF bytes.
 
 import { NextResponse } from "next/server";
-import PDFParser from "pdf2json";
 import { getServerSupabase, getTokenFromRequest } from "@/lib/supabase-client";
 
 export const runtime = "nodejs";
 const BUCKET = "documents";
-
-// Extract text from PDF using pdf2json (pure Node.js, works on Vercel)
-async function extractPdfText(buffer: Buffer): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const pdfParser = new PDFParser();
-
-    // Use 'unknown' to bypass strict pdf2json type checking
-    pdfParser.on("pdfParser_dataError", (errData: unknown) => {
-      let errorMessage = "PDF parsing failed";
-      const err = errData as { parserError?: string; message?: string };
-      if (err.parserError) {
-        errorMessage = err.parserError;
-      } else if (err.message) {
-        errorMessage = err.message;
-      }
-      reject(new Error(errorMessage));
-    });
-
-    pdfParser.on("pdfParser_dataReady", (pdfData: unknown) => {
-      try {
-        const data = pdfData as {
-          Pages?: Array<{
-            Texts?: Array<{
-              R?: Array<{ T?: string }>;
-            }>;
-          }>;
-        };
-
-        const pages = data.Pages || [];
-        const fullText = pages
-          .map((page) => {
-            const texts = page.Texts || [];
-            return texts
-              .map((text) => {
-                const r = text.R || [];
-                return r.map((item) => decodeURIComponent(item.T || "")).join("");
-              })
-              .join(" ");
-          })
-          .join("\n\n");
-        resolve(fullText);
-      } catch (err) {
-        reject(err instanceof Error ? err : new Error(String(err)));
-      }
-    });
-
-    pdfParser.parseBuffer(buffer);
-  });
-}
 
 export async function POST(request: Request) {
   const startTime = Date.now();
@@ -88,7 +41,10 @@ export async function POST(request: Request) {
 
     console.log(`[upload] ✓ User authenticated: ${user.email}`);
 
-    // 2) Read file from form data
+    // 2) Read file + optional pre-extracted text from form data.
+    //    For PDFs the client runs pdfjs-dist in the browser (pdf-extract.ts)
+    //    and sends the result as a `content` field — no server-side PDF
+    //    parsing needed, which avoids Vercel serverless worker-file crashes.
     console.log("[upload] Reading form data...");
     const formData = await request.formData();
     const file = formData.get("file");
@@ -100,7 +56,7 @@ export async function POST(request: Request) {
 
     console.log(`[upload] File received: ${file.name} (${file.type}, ${file.size} bytes)`);
 
-    // Convert to Buffer immediately to prevent detached ArrayBuffer
+    // Convert to Buffer immediately to prevent detached ArrayBuffer issues.
     const arrayBuffer = await file.arrayBuffer();
     const fileBuffer = Buffer.from(arrayBuffer);
     console.log(`[upload] ✓ Converted to Buffer (${fileBuffer.length} bytes)`);
@@ -109,12 +65,23 @@ export async function POST(request: Request) {
       file.type === "application/pdf" ||
       file.name.toLowerCase().endsWith(".pdf");
 
-    // 3) Extract text
-    console.log(`[upload] Extracting text (isPdf: ${isPdf})...`);
+    // 3) Resolve text content.
+    //    - PDFs: use the client-extracted text that arrived in FormData["content"].
+    //    - TXT files: decode the raw bytes on the server (always safe).
     let content = "";
     if (isPdf) {
-      content = await extractPdfText(fileBuffer);
-      console.log(`[upload] ✓ Extracted ${content.length} chars from PDF`);
+      // The client sends pre-extracted text to avoid server-side pdfjs issues.
+      const clientContent = formData.get("content");
+      if (typeof clientContent === "string" && clientContent.trim().length > 0) {
+        content = clientContent;
+        console.log(`[upload] ✓ Used client-extracted PDF text (${content.length} chars)`);
+      } else {
+        // Fallback: no client text was provided (e.g. old client version).
+        // Store an empty string so the row is still created; the user can
+        // re-memorize after updating the client.
+        content = "";
+        console.log("[upload] ⚠️ No client-extracted text received for PDF. Storing empty content.");
+      }
     } else {
       content = new TextDecoder().decode(fileBuffer);
       console.log(`[upload] ✓ Read ${content.length} chars from text file`);

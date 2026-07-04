@@ -7,6 +7,7 @@ import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { UploadCloud, FileText, Loader2 } from "lucide-react";
 import { getBrowserSupabase } from "@/lib/supabase-client";
+import { extractTextFromPdf } from "@/lib/pdf-extract";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,10 +67,21 @@ export function UploadModal() {
       }
 
       try {
-        // Step 1: upload the file and extract its text.
+        // Step 1: For PDFs, extract text in the browser before uploading.
+        // This avoids pdfjs-dist worker-file crashes in Vercel serverless.
         setStatus("uploading");
         const formData = new FormData();
         formData.append("file", file);
+
+        if (
+          file.type === "application/pdf" ||
+          file.name.toLowerCase().endsWith(".pdf")
+        ) {
+          const pdfText = await extractTextFromPdf(file);
+          // Send the extracted text alongside the file so the server route
+          // can store it without doing any server-side PDF parsing.
+          formData.append("content", pdfText);
+        }
 
         const uploadRes = await fetch("/api/upload", {
           method: "POST",
