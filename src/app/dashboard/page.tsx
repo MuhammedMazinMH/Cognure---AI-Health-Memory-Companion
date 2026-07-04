@@ -65,7 +65,6 @@ export default function DashboardPage() {
                 : "Upload a document to start building your graph."}
             </p>
           </div>
-          <UploadModal />
         </div>
 
         {/* Quick stats — only show when there's data */}
