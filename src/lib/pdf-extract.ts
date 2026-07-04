@@ -1,5 +1,6 @@
-// Client-side PDF text extraction using pdfjs-dist with a CDN worker.
-// This runs entirely in the browser, avoiding serverless worker-file issues on Vercel.
+// Client-side PDF text extraction using pdfjs-dist with a locally bundled worker.
+// The worker file lives at public/pdfjs/pdf.worker.min.mjs and is served from
+// the app's own domain, so it works on Vercel without relying on any CDN.
 "use client";
 
 /**
@@ -15,9 +16,10 @@ export async function extractTextFromPdf(file: File): Promise<string> {
   // This prevents SSR issues on Vercel where DOMMatrix is not available.
   const pdfjs = await import("pdfjs-dist");
 
-  // Point the worker at the matching version on cdnjs so no worker file needs
-  // to be bundled or served from the Next.js app itself.
-  pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
+  // Use the locally bundled worker file (public/pdfjs/pdf.worker.min.mjs)
+  // instead of a CDN URL. This guarantees the worker is always available
+  // and version-matched without any external dependency.
+  pdfjs.GlobalWorkerOptions.workerSrc = "/pdfjs/pdf.worker.min.mjs";
 
   // Read the file into an ArrayBuffer so pdfjs can parse it.
   const arrayBuffer = await file.arrayBuffer();
