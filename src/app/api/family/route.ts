@@ -30,11 +30,18 @@ export async function GET(request: Request) {
 
   const { data: shares, error } = await supabase
     .from("family_shares")
-    .select("id, invited_email, created_at, status")
-    .eq("owner_id", user.id)
+    .select("id, shared_email, created_at, status")
+    .eq("owner_user_id", user.id)
     .order("created_at", { ascending: false });
 
   if (error) {
+    // Return a friendly message when the table hasn't been created yet.
+    if (error.code === "42P01" || error.message.includes("does not exist") || error.message.includes("schema cache")) {
+      return NextResponse.json(
+        { error: "Family sharing setup in progress. Please refresh." },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
@@ -83,8 +90,8 @@ export async function POST(request: Request) {
   const { data: existing } = await supabase
     .from("family_shares")
     .select("id")
-    .eq("owner_id", user.id)
-    .eq("invited_email", email)
+    .eq("owner_user_id", user.id)
+    .eq("shared_email", email)
     .maybeSingle();
 
   if (existing) {
@@ -97,8 +104,8 @@ export async function POST(request: Request) {
   const { data: share, error: insertError } = await supabase
     .from("family_shares")
     .insert({
-      owner_id: user.id,
-      invited_email: email,
+      owner_user_id: user.id,
+      shared_email: email,
       status: "pending",
     })
     .select()
@@ -154,7 +161,7 @@ export async function DELETE(request: Request) {
     .from("family_shares")
     .delete()
     .eq("id", id)
-    .eq("owner_id", user.id); // Only the owner can revoke.
+    .eq("owner_user_id", user.id); // Only the owner can revoke.
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -24,8 +24,8 @@ import {
 
 interface FamilyShare {
   id: string;
-  invited_email: string;
-  status: "pending" | "accepted";
+  shared_email: string;
+  status: "pending" | "active" | "revoked";
   created_at: string;
 }
 
@@ -44,6 +44,8 @@ export default function FamilyPage() {
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState(false);
 
+  // Stores the email that was just successfully invited (used in success toast).
+  const [sentEmail, setSentEmail] = useState("");
   // Revoke state — tracks which share id is being deleted.
   const [revoking, setRevoking] = useState<string | null>(null);
 
@@ -82,9 +84,17 @@ export default function FamilyPage() {
   // Send an invite.
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault();
-    setInviting(true);
     setInviteError(null);
     setInviteSuccess(false);
+
+    // Client-side email format validation before hitting the network.
+    const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!EMAIL_RE.test(inviteEmail.trim())) {
+      setInviteError("Please enter a valid email address.");
+      return;
+    }
+
+    setInviting(true);
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -99,12 +109,22 @@ export default function FamilyPage() {
         body: JSON.stringify({ email: inviteEmail }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to invite");
+      const data = (await res.json()) as { error?: string };
+      if (!res.ok) {
+        // Provide a friendly message when the DB table hasn't been created yet.
+        const msg = data.error ?? "Failed to invite";
+        if (msg.toLowerCase().includes("family_shares") || msg.toLowerCase().includes("does not exist") || msg.toLowerCase().includes("schema cache")) {
+          throw new Error("Family sharing setup is in progress. Please refresh the page and try again.");
+        }
+        throw new Error(msg);
+      }
 
+      const sentTo = inviteEmail.trim();
       setInviteEmail("");
       setInviteSuccess(true);
-      setTimeout(() => setInviteSuccess(false), 4000);
+      // Auto-dismiss after 5 s; store sentTo for the message.
+      setSentEmail(sentTo);
+      setTimeout(() => setInviteSuccess(false), 5000);
       await loadShares();
     } catch (err) {
       setInviteError(err instanceof Error ? err.message : "Failed to invite");
@@ -211,7 +231,7 @@ export default function FamilyPage() {
             )}
             {inviteSuccess && (
               <div className="mt-3 rounded-xl border border-sage/30 bg-sage/8 px-4 py-2.5 text-sm text-sage">
-                Invite sent successfully.
+                Invitation sent to <strong>{sentEmail}</strong>.
               </div>
             )}
           </div>
@@ -261,13 +281,13 @@ export default function FamilyPage() {
                   >
                     {/* Avatar */}
                     <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-lavender/20 text-sm font-bold text-lavender">
-                      {share.invited_email.charAt(0).toUpperCase()}
+                      {share.shared_email.charAt(0).toUpperCase()}
                     </div>
 
                     <div className="flex-1 min-w-0">
                       <p className="flex items-center gap-1.5 truncate text-sm font-medium text-charcoal">
                         <Mail className="h-3.5 w-3.5 text-charcoal/30" />
-                        {share.invited_email}
+                        {share.shared_email}
                       </p>
                       <p className="mt-0.5 flex items-center gap-1 text-xs text-charcoal/40">
                         <Clock className="h-3 w-3" />
@@ -278,19 +298,25 @@ export default function FamilyPage() {
                     {/* Status badge */}
                     <span
                       className={
-                        share.status === "accepted"
+                        share.status === "active"
                           ? "rounded-full bg-sage/15 px-2.5 py-0.5 text-xs font-medium text-sage"
+                          : share.status === "revoked"
+                          ? "rounded-full bg-coral/10 px-2.5 py-0.5 text-xs font-medium text-coral"
                           : "rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-charcoal/40"
                       }
                     >
-                      {share.status === "accepted" ? "Active" : "Pending"}
+                      {share.status === "active"
+                        ? "Active"
+                        : share.status === "revoked"
+                        ? "Revoked"
+                        : "Pending"}
                     </span>
 
                     {/* Revoke button */}
                     <button
                       onClick={() => handleRevoke(share.id)}
                       disabled={revoking === share.id}
-                      aria-label={`Revoke access for ${share.invited_email}`}
+                      aria-label={`Revoke access for ${share.shared_email}`}
                       className="flex h-8 w-8 items-center justify-center rounded-lg text-charcoal/30 transition-colors hover:bg-coral/10 hover:text-coral disabled:opacity-40"
                     >
                       {revoking === share.id ? (

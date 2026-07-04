@@ -4,7 +4,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, Menu, Plus, User } from "lucide-react";
+import { LogOut, Menu, User } from "lucide-react";
 import { getBrowserSupabase } from "@/lib/supabase-client";
 import { UploadModal } from "@/components/upload-modal";
 import { Button } from "@/components/ui/button";
@@ -71,20 +71,10 @@ export function Header({ onToggleSidebar }: HeaderProps) {
         </span>
       </div>
 
-      {/* Right: upload + avatar */}
+      {/* Right: upload (default "Add Memory" trigger) + avatar */}
       <div className="flex items-center gap-3">
-        {/* The UploadModal renders its own trigger button. */}
-        <UploadModal
-          trigger={
-            <Button
-              size="sm"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-sage px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sage/90"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Add document
-            </Button>
-          }
-        />
+        {/* No custom trigger — UploadModal renders its own "Add Memory" button. */}
+        <UploadModal />
 
         {/* Avatar dropdown */}
         <DropdownMenu>
