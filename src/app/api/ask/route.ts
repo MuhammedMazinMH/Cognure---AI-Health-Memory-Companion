@@ -184,6 +184,35 @@ export async function POST(request: Request) {
       }
     }
 
+    // If the question is about medications, append any known interaction
+    // warnings to the context so Groq can surface them in the answer.
+    const questionLower = question.toLowerCase();
+    const isMedQuestion =
+      questionLower.includes("medication") ||
+      questionLower.includes("drug") ||
+      questionLower.includes("pill") ||
+      questionLower.includes("interact") ||
+      questionLower.includes("medicine") ||
+      questionLower.includes("prescri");
+
+    if (isMedQuestion) {
+      const { data: interactions } = await supabase
+        .from("medication_interactions")
+        .select("medications, severity, description")
+        .eq("user_id", user.id);
+
+      if (interactions && interactions.length > 0) {
+        const warningText = interactions
+          .map(
+            (i: { medications: string[]; severity: string; description: string }) =>
+              `INTERACTION WARNING (${i.severity}): ${i.medications.join(" + ")} — ${i.description}`
+          )
+          .join("\n");
+        context = `${context}\n\n--- Medication Interaction Warnings ---\n${warningText}`;
+        console.log(`[ask] Appended ${interactions.length} interaction warning(s) to context`);
+      }
+    }
+
     console.log(`[ask] Final context length: ${context.length} chars`);
     console.log("[ask] Generating answer...");
     const answer = await generateAnswer(question, context);

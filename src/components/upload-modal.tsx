@@ -1,11 +1,8 @@
-// A pop-up dialog that lets the user add a memory by uploading a PDF or TXT
-// file. It renders its OWN "Add Memory" button as the trigger, so we can drop
-// <UploadModal /> straight into the header.
 "use client";
 
 import { useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { UploadCloud, FileText, Loader2 } from "lucide-react";
+import { UploadCloud, FileText, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { getBrowserSupabase } from "@/lib/supabase-client";
 import { extractTextFromPdf } from "@/lib/pdf-extract";
 import { cn } from "@/lib/utils";
@@ -19,33 +16,150 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 
+// ── Progress steps shown during auto-memorize ────────────────────────────────
+type Step = "uploading" | "extracting" | "memorizing" | "done";
+
+const STEP_LABELS: Record<Step, string> = {
+  uploading: "Uploading document…",
+  extracting: "Extracting text…",
+  memorizing: "Memorizing entities…",
+  done: "Done!",
+};
+
+function StepIndicator({
+  step,
+  current,
+  label,
+}: {
+  step: Step;
+  current: Step | "idle" | "error";
+  label: string;
+}) {
+  const STEPS: Step[] = ["uploading", "extracting", "memorizing", "done"];
+  const currentIdx = STEPS.indexOf(current as Step);
+  const stepIdx = STEPS.indexOf(step);
+
+  const isComplete = currentIdx > stepIdx;
+  const isActive = current === step;
+  const isPending = currentIdx < stepIdx || current === "idle";
+
+  return (
+    <div className="flex items-center gap-3">
+      <div
+        className={cn(
+          "flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors",
+          isComplete
+            ? "bg-sage text-white"
+            : isActive
+            ? "bg-sage/20 text-sage ring-2 ring-sage"
+            : "bg-muted text-muted-foreground"
+        )}
+      >
+        {isComplete ? (
+          <CheckCircle2 className="h-4 w-4" />
+        ) : (
+          <span>{STEPS.indexOf(step) + 1}</span>
+        )}
+      </div>
+      <span
+        className={cn(
+          "text-sm",
+          isActive
+            ? "font-semibold text-charcoal"
+            : isComplete
+            ? "text-sage"
+            : "text-muted-foreground"
+        )}
+      >
+        {label}
+        {isActive && <Loader2 className="ml-2 inline h-3.5 w-3.5 animate-spin" />}
+      </span>
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
+
 export function UploadModal() {
   const router = useRouter();
   const supabase = getBrowserSupabase();
-
-  // A hidden <input type="file"> we click programmatically.
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [open, setOpen] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [status, setStatus] = useState<
-    "idle" | "uploading" | "uploaded" | "memorizing" | "memorized" | "done"
-  >("idle");
+  const [status, setStatus] = useState<"idle" | Step | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
-  const [uploadedDocument, setUploadedDocument] = useState<{
-    content: string;
-    id: string;
-  } | null>(null);
   const [entityCounts, setEntityCounts] = useState<Record<string, number>>({});
+  const [interactionCount, setInteractionCount] = useState(0);
 
-  // The main routine: send the file to our API, then remember its text.
+  // Held between upload and memorize steps so retry is possible.
+  const pendingMemorize = useRef<{ content: string; documentId: string } | null>(null);
+
+  const resetModal = useCallback(() => {
+    setStatus("idle");
+    setError(null);
+    setFileName(null);
+    setEntityCounts({});
+    setInteractionCount(0);
+    pendingMemorize.current = null;
+  }, []);
+
+  // Memorize step — can be called automatically or on retry.
+  const runMemorize = useCallback(
+    async (content: string, documentId: string) => {
+      setStatus("memorizing");
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        setError("You are not signed in. Please log in again.");
+        setStatus("error");
+        return;
+      }
+
+      try {
+        const rememberRes = await fetch("/api/remember", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({ text: content, documentId }),
+        });
+        const rememberData = await rememberRes.json();
+
+        if (!rememberRes.ok) {
+          throw new Error(rememberData.error ?? "Could not extract entities.");
+        }
+
+        setEntityCounts(rememberData.count ?? {});
+        setInteractionCount((rememberData.interactions ?? []).length);
+        setStatus("done");
+        router.refresh();
+
+        // Auto-close after 2.5 s.
+        setTimeout(() => {
+          setOpen(false);
+          resetModal();
+        }, 2500);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Entity extraction failed.");
+        setStatus("error");
+      }
+    },
+    [supabase, router, resetModal]
+  );
+
+  // Full flow: extract PDF text → upload → memorize.
   const handleFile = useCallback(
     async (file: File) => {
       setError(null);
       setFileName(file.name);
+      pendingMemorize.current = null;
 
-      // Only allow PDF and TXT files.
       const isAllowed =
         file.type === "application/pdf" ||
         file.type === "text/plain" ||
@@ -56,7 +170,6 @@ export function UploadModal() {
         return;
       }
 
-      // We need the user's access token to prove who they are to the API.
       const {
         data: { session },
       } = await supabase.auth.getSession();
@@ -67,22 +180,22 @@ export function UploadModal() {
       }
 
       try {
-        // Step 1: For PDFs, extract text in the browser before uploading.
-        // This avoids pdfjs-dist worker-file crashes in Vercel serverless.
-        setStatus("uploading");
+        // Step 1: extract text (PDF only, in browser).
+        setStatus("extracting");
         const formData = new FormData();
         formData.append("file", file);
 
-        if (
+        const isPdf =
           file.type === "application/pdf" ||
-          file.name.toLowerCase().endsWith(".pdf")
-        ) {
+          file.name.toLowerCase().endsWith(".pdf");
+
+        if (isPdf) {
           const pdfText = await extractTextFromPdf(file);
-          // Send the extracted text alongside the file so the server route
-          // can store it without doing any server-side PDF parsing.
           formData.append("content", pdfText);
         }
 
+        // Step 2: upload the file.
+        setStatus("uploading");
         const uploadRes = await fetch("/api/upload", {
           method: "POST",
           headers: { Authorization: `Bearer ${session.access_token}` },
@@ -94,76 +207,19 @@ export function UploadModal() {
           throw new Error(uploadData.error ?? "Upload failed.");
         }
 
-        // Upload complete - now show "Memorize" button instead of auto-memorizing
-        setStatus("uploaded");
-        setUploadedDocument({
-          content: uploadData.document.content,
-          id: uploadData.document.id,
-        });
+        const { content, id: documentId } = uploadData.document;
+
+        // Step 3: auto-memorize.
+        pendingMemorize.current = { content, documentId };
+        await runMemorize(content, documentId);
       } catch (err) {
-        setStatus("idle");
+        setStatus("error");
         setError(err instanceof Error ? err.message : "Something went wrong.");
       }
     },
-    [supabase]
+    [supabase, runMemorize]
   );
 
-  // New function: Handle memorization when user clicks "Memorize" button
-  const handleMemorize = useCallback(async () => {
-    if (!uploadedDocument) return;
-
-    setError(null);
-    
-    // Get the user's access token
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session) {
-      setError("You are not signed in. Please log in again.");
-      return;
-    }
-
-    try {
-      // Step 2: turn the extracted text into a memory with entity extraction.
-      setStatus("memorizing");
-      const rememberRes = await fetch("/api/remember", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-        },
-        body: JSON.stringify({
-          text: uploadedDocument.content,
-          documentId: uploadedDocument.id,
-        }),
-      });
-      const rememberData = await rememberRes.json();
-
-      if (!rememberRes.ok) {
-        throw new Error(rememberData.error ?? "Could not extract entities.");
-      }
-
-      // Show success with entity counts
-      setStatus("memorized");
-      setEntityCounts(rememberData.count || {});
-      
-      // Refresh the page so new data shows up, then close after a moment.
-      router.refresh();
-      setTimeout(() => {
-        setOpen(false);
-        setStatus("idle");
-        setFileName(null);
-        setUploadedDocument(null);
-        setEntityCounts({});
-      }, 2000);
-    } catch (err) {
-      setStatus("uploaded"); // Return to uploaded state so user can retry
-      setError(err instanceof Error ? err.message : "Entity extraction failed.");
-    }
-  }, [uploadedDocument, router, supabase]);
-
-  // Handle a file dropped onto the drop zone.
   function onDrop(event: React.DragEvent<HTMLDivElement>) {
     event.preventDefault();
     setDragging(false);
@@ -171,13 +227,24 @@ export function UploadModal() {
     if (file) handleFile(file);
   }
 
-  const busy = status === "uploading" || status === "memorizing";
+  const busy =
+    status === "uploading" ||
+    status === "extracting" ||
+    status === "memorizing";
+
+  const entitySummary = Object.entries(entityCounts)
+    .filter(([, count]) => count > 0)
+    .map(([type, count]) => `${count} ${type}${count !== 1 ? "s" : ""}`)
+    .join(", ");
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      {/* Base UI uses a `render` prop (instead of Radix's `asChild`) to make
-          the trigger render as our styled Button. The icon + label below are
-          passed in as the Button's children. */}
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) resetModal();
+      }}
+    >
       <DialogTrigger
         render={<Button className="bg-sage text-white hover:bg-sage/90" />}
       >
@@ -190,87 +257,102 @@ export function UploadModal() {
           <DialogTitle className="font-heading">Add a memory</DialogTitle>
           <DialogDescription>
             Upload a health document (PDF or TXT). Cognure will read it and
-            remember the important details.
+            remember the important details automatically.
           </DialogDescription>
         </DialogHeader>
 
-        {/* The drag-and-drop zone. Clicking it opens the file picker. */}
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => !busy && fileInputRef.current?.click()}
-          onKeyDown={(e) => {
-            if ((e.key === "Enter" || e.key === " ") && !busy) {
-              fileInputRef.current?.click();
-            }
-          }}
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragging(true);
-          }}
-          onDragLeave={() => setDragging(false)}
-          onDrop={onDrop}
-          className={cn(
-            "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition-colors",
-            dragging
-              ? "border-sage bg-sage/10"
-              : "border-border hover:border-sage/60 hover:bg-accent/40"
-          )}
-        >
-          {busy ? (
-            <Loader2 className="h-10 w-10 animate-spin text-sage" />
-          ) : status === "done" || status === "memorized" ? (
-            <FileText className="h-10 w-10 text-sage" />
-          ) : (
+        {/* Drop zone — only interactive when idle or error */}
+        {(status === "idle" || status === "error") && (
+          <div
+            role="button"
+            tabIndex={0}
+            onClick={() => fileInputRef.current?.click()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") fileInputRef.current?.click();
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragging(true);
+            }}
+            onDragLeave={() => setDragging(false)}
+            onDrop={onDrop}
+            className={cn(
+              "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed p-10 text-center transition-colors",
+              dragging
+                ? "border-sage bg-sage/10"
+                : "border-border hover:border-sage/60 hover:bg-accent/40"
+            )}
+          >
             <UploadCloud className="h-10 w-10 text-sage" />
-          )}
+            <div className="text-sm">
+              <p className="font-medium text-charcoal">Drag &amp; drop a file here</p>
+              <p className="text-muted-foreground">or click to browse</p>
+            </div>
+            <p className="text-xs text-muted-foreground">PDF or TXT</p>
+          </div>
+        )}
 
-          <div className="text-sm">
-            {status === "uploading" && <p>Reading your document…</p>}
-            {status === "uploaded" && (
-              <p className="font-medium text-charcoal">
-                Document uploaded! Click Memorize to extract entities.
+        {/* Progress steps during processing */}
+        {busy && (
+          <div className="rounded-xl border bg-muted/30 p-5 space-y-4">
+            <p className="text-sm font-medium text-charcoal mb-2">
+              Processing <span className="text-sage">{fileName}</span>
+            </p>
+            <StepIndicator step="extracting" current={status} label="Extracting text" />
+            <StepIndicator step="uploading" current={status} label="Uploading document" />
+            <StepIndicator step="memorizing" current={status} label="Memorizing entities" />
+            <StepIndicator step="done" current={status} label="Done!" />
+          </div>
+        )}
+
+        {/* Success state */}
+        {status === "done" && (
+          <div className="rounded-xl border border-sage/30 bg-sage/5 p-5 space-y-3">
+            <div className="flex items-center gap-2 text-sage">
+              <CheckCircle2 className="h-5 w-5" />
+              <p className="font-semibold">Memorized successfully!</p>
+            </div>
+            <p className="text-sm text-charcoal">
+              <span className="font-medium">{fileName}</span> has been processed.
+            </p>
+            {entitySummary && (
+              <p className="text-sm text-muted-foreground">
+                Found: {entitySummary}
               </p>
             )}
-            {status === "memorizing" && <p>Extracting medical entities...</p>}
-            {status === "memorized" && (
-              <p className="font-medium text-sage">
-                ✓ Memorized! Found{" "}
-                {Object.entries(entityCounts)
-                  .filter(([_, count]) => count > 0)
-                  .map(([type, count]) => `${count} ${type}${count !== 1 ? "s" : ""}`)
-                  .join(", ") || "no entities"}
+            {interactionCount > 0 && (
+              <p className="text-sm font-medium text-red-600">
+                {interactionCount} medication interaction warning
+                {interactionCount !== 1 ? "s" : ""} detected — check the Memory
+                Graph.
               </p>
-            )}
-            {status === "idle" && (
-              <>
-                <p className="font-medium text-charcoal">
-                  Drag &amp; drop a file here
-                </p>
-                <p className="text-muted-foreground">or click to browse</p>
-              </>
             )}
           </div>
+        )}
 
-          {fileName && status !== "done" && status !== "memorized" && (
-            <p className="text-xs text-muted-foreground">{fileName}</p>
-          )}
+        {/* Error state with optional retry */}
+        {status === "error" && error && (
+          <div className="rounded-xl border border-coral/30 bg-coral/5 p-4 space-y-3">
+            <div className="flex items-start gap-2 text-coral">
+              <AlertCircle className="h-5 w-5 shrink-0 mt-0.5" />
+              <p className="text-sm">{error}</p>
+            </div>
+            {pendingMemorize.current && (
+              <Button
+                size="sm"
+                className="bg-sage text-white hover:bg-sage/90"
+                onClick={() => {
+                  const p = pendingMemorize.current!;
+                  runMemorize(p.content, p.documentId);
+                }}
+              >
+                Retry Memorize
+              </Button>
+            )}
+          </div>
+        )}
 
-          {/* Show Memorize button after upload */}
-          {status === "uploaded" && (
-            <Button
-              onClick={(e) => {
-                e.stopPropagation();
-                handleMemorize();
-              }}
-              className="mt-4 bg-sage text-white hover:bg-sage/90"
-            >
-              Memorize
-            </Button>
-          )}
-        </div>
-
-        {/* Hidden input that actually accepts the file selection. */}
+        {/* Hidden file input */}
         <input
           ref={fileInputRef}
           type="file"
@@ -279,16 +361,9 @@ export function UploadModal() {
           onChange={(e) => {
             const file = e.target.files?.[0];
             if (file) handleFile(file);
-            // Reset so selecting the same file again still fires onChange.
             e.target.value = "";
           }}
         />
-
-        {error && (
-          <p className="rounded-md bg-coral/10 px-3 py-2 text-sm text-coral">
-            {error}
-          </p>
-        )}
       </DialogContent>
     </Dialog>
   );

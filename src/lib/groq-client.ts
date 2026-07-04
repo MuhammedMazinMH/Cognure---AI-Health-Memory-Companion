@@ -132,6 +132,70 @@ export async function extractEntities(text: string): Promise<HealthEntity[]> {
 }
 
 /**
+ * Interaction severity levels.
+ */
+export type InteractionSeverity = "mild" | "moderate" | "severe";
+
+export interface MedicationInteraction {
+  medications: string[]; // the two (or more) drugs involved
+  severity: InteractionSeverity;
+  description: string;
+}
+
+export interface InteractionCheckResult {
+  hasInteractions: boolean;
+  interactions: MedicationInteraction[];
+  summary: string;
+}
+
+/**
+ * Given a list of medication names, asks Groq to identify any dangerous
+ * interactions between them. Returns structured results.
+ */
+export async function checkInteractions(
+  medications: string[]
+): Promise<InteractionCheckResult> {
+  if (medications.length < 2) {
+    return { hasInteractions: false, interactions: [], summary: "" };
+  }
+
+  const list = medications.map((m) => `- ${m}`).join("\n");
+  const systemPrompt =
+    "You are a clinical pharmacist. Given a list of medications, identify any " +
+    "known drug-drug interactions. For each interaction specify: medications " +
+    "(array of names), severity (mild|moderate|severe), and description. " +
+    'Return a JSON object: {"hasInteractions": boolean, "interactions": ' +
+    '[{"medications": [...], "severity": "...", "description": "..."}], ' +
+    '"summary": "One-sentence plain-English summary or empty string"}. ' +
+    "If no interactions, return hasInteractions: false with empty interactions array.";
+
+  const raw = await callGroq(
+    [
+      { role: "system", content: systemPrompt },
+      {
+        role: "user",
+        content: `Check these medications for interactions:\n${list}`,
+      },
+    ],
+    true
+  );
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { hasInteractions: false, interactions: [], summary: "" };
+  }
+
+  const result = parsed as Partial<InteractionCheckResult>;
+  return {
+    hasInteractions: result.hasInteractions ?? false,
+    interactions: Array.isArray(result.interactions) ? result.interactions : [],
+    summary: typeof result.summary === "string" ? result.summary : "",
+  };
+}
+
+/**
  * Writes a chat answer for the user's question, grounded ONLY in the provided
  * context that Cognee recalled. If the answer is not in the context, the model
  * is told to say so rather than make something up.
