@@ -5,7 +5,7 @@
 // CLIENT component: React Flow renders in the browser and needs interactivity.
 "use client";
 
-import { useMemo, useState, useCallback } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import React from "react";
 import ReactFlow, {
   Background,
@@ -25,6 +25,8 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { getBrowserSupabase } from "@/lib/supabase-client";
+import { AlertTriangle } from "lucide-react";
 
 // Brand-aligned color for each entity type.
 const TYPE_COLORS: Record<HealthEntityType, string> = {
@@ -56,7 +58,16 @@ interface MemoryGraphProps {
   entities?: HealthEntity[];
 }
 
+interface MedInteraction {
+  id: string;
+  medications: string[];
+  severity: string;
+  description: string;
+}
+
 export function MemoryGraph({ entities }: MemoryGraphProps) {
+  const supabase = getBrowserSupabase();
+
   // State for entity details dialog
   const [selectedEntity, setSelectedEntity] = useState<HealthEntity | null>(null);
   // Search filter
@@ -65,6 +76,29 @@ export function MemoryGraph({ entities }: MemoryGraphProps) {
   const [activeFilter, setActiveFilter] = useState<HealthEntityType | "all">("all");
   // How many nodes to show (pagination)
   const [displayCount, setDisplayCount] = useState(NODES_PER_PAGE);
+  // Medication interactions from the API
+  const [interactions, setInteractions] = useState<MedInteraction[]>([]);
+  // Selected interaction warning (for the warning dialog)
+  const [selectedInteraction, setSelectedInteraction] = useState<MedInteraction | null>(null);
+
+  // Fetch interactions on mount
+  useEffect(() => {
+    async function loadInteractions() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+        const res = await fetch("/api/interactions", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        setInteractions(json.interactions ?? []);
+      } catch {
+        // Non-fatal: graph still works without interaction data.
+      }
+    }
+    loadInteractions();
+  }, [supabase]);
 
   // Get all entities (real or sample)
   const allEntities = useMemo(() => {
@@ -107,6 +141,32 @@ export function MemoryGraph({ entities }: MemoryGraphProps) {
     setDisplayCount(NODES_PER_PAGE);
   }, []);
 
+  // Names (lowercased) of medications that have at least one known interaction.
+  const warningMedNames = useMemo(() => {
+    const names = new Set<string>();
+    for (const interaction of interactions) {
+      for (const med of interaction.medications) {
+        names.add(med.toLowerCase());
+      }
+    }
+    return names;
+  }, [interactions]);
+
+  // Lookup: given a medication name, find the worst interaction it is involved in.
+  const interactionByMed = useCallback((name: string): MedInteraction | null => {
+    const lower = name.toLowerCase();
+    const severityOrder: Record<string, number> = { severe: 3, moderate: 2, mild: 1 };
+    let worst: MedInteraction | null = null;
+    for (const i of interactions) {
+      if (i.medications.some((m) => m.toLowerCase() === lower)) {
+        if (!worst || (severityOrder[i.severity] ?? 0) > (severityOrder[worst.severity] ?? 0)) {
+          worst = i;
+        }
+      }
+    }
+    return worst;
+  }, [interactions]);
+
   // Build nodes and edges
   const { nodes, edges } = useMemo(() => {
     const data = visibleEntities;
@@ -143,19 +203,27 @@ export function MemoryGraph({ entities }: MemoryGraphProps) {
 
       const isShadow = entity.type === "symptom" && entity.confidence < 0.5;
       const baseColor = TYPE_COLORS[entity.type];
+      const hasWarning =
+        entity.type === "medication" &&
+        warningMedNames.has(entity.name.toLowerCase());
 
       return {
         id: `entity-${index}`,
         position: { x, y },
         data: {
-          label: entity.name,
+          label: hasWarning ? `⚠ ${entity.name}` : entity.name,
           confidence: Math.round(entity.confidence * 100),
           entity: entity,
+          hasWarning,
         },
         style: {
           background: isShadow ? "#ffffff" : baseColor,
           color: isShadow ? "#2c2c2c" : "white",
-          border: isShadow ? `2px dashed ${LAVENDER}` : "2px solid transparent",
+          border: hasWarning
+            ? "2.5px solid #dc2626"
+            : isShadow
+            ? `2px dashed ${LAVENDER}`
+            : "2px solid transparent",
           borderRadius: 8,
           padding: "4px 6px",
           fontSize: 10,
@@ -173,7 +241,9 @@ export function MemoryGraph({ entities }: MemoryGraphProps) {
           overflow: "hidden",
           opacity: isShadow ? 0.85 : 1,
           cursor: "pointer",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+          boxShadow: hasWarning
+            ? "0 0 0 3px rgba(220,38,38,0.2)"
+            : "0 1px 3px rgba(0,0,0,0.1)",
         },
       };
     });
@@ -200,12 +270,21 @@ export function MemoryGraph({ entities }: MemoryGraphProps) {
     };
   }, [visibleEntities]);
 
-  // Handle node click
+  // Handle node click — if the medication has an interaction, show the warning
+  // dialog instead of the generic entity dialog.
   const handleNodeClick = useCallback((_event: React.MouseEvent, node: Node) => {
-    if (node.id !== "center" && node.data?.entity) {
-      setSelectedEntity(node.data.entity as HealthEntity);
+    if (node.id === "center") return;
+    if (!node.data?.entity) return;
+    const entity = node.data.entity as HealthEntity;
+    if (node.data.hasWarning) {
+      const interaction = interactionByMed(entity.name);
+      if (interaction) {
+        setSelectedInteraction(interaction);
+        return;
+      }
     }
-  }, []);
+    setSelectedEntity(entity);
+  }, [interactionByMed]);
 
   // Category filter buttons
   const categories: { label: string; value: HealthEntityType | "all" }[] = [
@@ -286,6 +365,47 @@ export function MemoryGraph({ entities }: MemoryGraphProps) {
           </div>
         )}
       </div>
+
+      {/* Medication Interaction Warning Dialog */}
+      <Dialog
+        open={selectedInteraction !== null}
+        onOpenChange={() => setSelectedInteraction(null)}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 font-heading text-red-600">
+              <AlertTriangle className="h-5 w-5" />
+              Medication Interaction Warning
+            </DialogTitle>
+          </DialogHeader>
+          {selectedInteraction && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {selectedInteraction.medications.map((med) => (
+                  <Badge
+                    key={med}
+                    style={{ backgroundColor: TYPE_COLORS.medication, color: "white" }}
+                  >
+                    {med}
+                  </Badge>
+                ))}
+              </div>
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-red-600 mb-1">
+                  Severity: {selectedInteraction.severity}
+                </p>
+                <p className="text-sm text-charcoal">
+                  {selectedInteraction.description}
+                </p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                This information is for reference only. Always consult your
+                healthcare provider before making any medication changes.
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Entity Details Dialog */}
       <Dialog

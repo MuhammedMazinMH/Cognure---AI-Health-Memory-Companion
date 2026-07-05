@@ -1,12 +1,7 @@
-// The Documents page lists every file the user has uploaded.
-//
-// IMPORTANT: This component fetches data through our API route (/api/documents)
-// instead of querying Supabase directly. This avoids 403 Forbidden errors
-// that happen when the browser client isn't properly authenticated.
 "use client";
 
 import { useEffect, useState } from "react";
-import { FileText, FileType } from "lucide-react";
+import { FileText, FileType, Plus, AlertCircle, FolderOpen } from "lucide-react";
 import { getBrowserSupabase } from "@/lib/supabase-client";
 import { UploadModal } from "@/components/upload-modal";
 import type { Document } from "@/types";
@@ -23,6 +18,8 @@ function formatDate(iso: string): string {
   }
 }
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 export default function DocumentsPage() {
   const supabase = getBrowserSupabase();
   const [loading, setLoading] = useState(true);
@@ -33,101 +30,137 @@ export default function DocumentsPage() {
     async function load() {
       setLoading(true);
       setError(null);
-
       try {
-        // Get the current user's session so we can send their access token
-        // to our API route. This proves who they are.
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
-
+        const { data: { session } } = await supabase.auth.getSession();
         if (!session) {
           setError("Please sign in to view your documents.");
           setLoading(false);
           return;
         }
-
-        // Fetch documents through our secure API route instead of directly
-        // querying Supabase. This avoids Row Level Security issues.
-        console.log("[Documents] Fetching documents from API...");
-        const response = await fetch("/api/documents", {
-          headers: {
-            // Send the access token so the API knows who we are
-            Authorization: `Bearer ${session.access_token}`,
-          },
+        const res = await fetch("/api/documents", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
         });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || "Failed to load documents");
+        if (!res.ok) {
+          const d = await res.json();
+          throw new Error(d.error || "Failed to load documents");
         }
-
-        const data = await response.json();
-        console.log(`[Documents] ✓ Loaded ${data.documents.length} documents`);
+        const data = await res.json();
         setDocuments(data.documents);
       } catch (err) {
-        console.error("[Documents] Failed to load:", err);
-        setError(
-          err instanceof Error ? err.message : "Failed to load documents"
-        );
+        setError(err instanceof Error ? err.message : "Failed to load documents");
       } finally {
         setLoading(false);
       }
     }
-
     load();
   }, [supabase]);
 
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="font-heading text-3xl font-bold text-charcoal">
-          Documents
-        </h1>
-        {/* Quick access to add another document. */}
-        <UploadModal />
+    <div className="flex h-full flex-col">
+      {/* Page header */}
+      <div className="border-b border-border bg-card px-6 py-5">
+        <h1 className="font-heading text-2xl font-bold text-charcoal">Documents</h1>
+        <p className="mt-0.5 text-sm text-charcoal/50">
+          {documents.length > 0
+            ? `${documents.length} document${documents.length !== 1 ? "s" : ""} uploaded`
+            : "All your uploaded health documents live here."}
+        </p>
       </div>
 
-      {error && (
-        <div className="rounded-lg border border-coral bg-coral/10 p-4 text-coral">
-          {error}
-        </div>
-      )}
+      {/* Content */}
+      <div className="flex-1 overflow-auto p-6">
+        {error && (
+          <div className="mb-6 flex items-center gap-3 rounded-xl border border-coral/30 bg-coral/8 px-4 py-3 text-sm text-coral">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            {error}
+          </div>
+        )}
 
-      {loading ? (
-        <p className="text-muted-foreground">Loading documents…</p>
-      ) : documents.length === 0 ? (
-        <p className="text-muted-foreground">
-          No documents yet. Upload a PDF or TXT to get started.
-        </p>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {documents.map((doc) => {
-            // Pick an icon based on whether it is a PDF.
-            const isPdf = doc.file_type.includes("pdf");
-            const Icon = isPdf ? FileType : FileText;
-            return (
+        {/* Skeletons */}
+        {loading && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
               <div
-                key={doc.id}
-                className="flex items-start gap-3 rounded-xl border bg-card p-4 shadow-sm"
+                key={i}
+                className="animate-pulse rounded-2xl border border-border bg-card p-5"
               >
-                <Icon className="h-8 w-8 shrink-0 text-sage" />
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-charcoal">
-                    {doc.file_name}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatDate(doc.created_at)}
-                  </p>
-                  <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                    {doc.content.slice(0, 120) || "No text extracted."}
-                  </p>
-                </div>
+                <div className="mb-3 h-8 w-8 rounded-lg bg-muted" />
+                <div className="mb-2 h-3.5 w-3/4 rounded bg-muted" />
+                <div className="h-3 w-1/3 rounded bg-muted" />
+                <div className="mt-3 h-3 w-full rounded bg-muted" />
               </div>
-            );
-          })}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+
+        {/* Empty state */}
+        {!loading && documents.length === 0 && !error && (
+          <div className="flex flex-col items-center justify-center gap-4 rounded-2xl border border-dashed border-border py-20 text-center">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-sage/10">
+              <FolderOpen className="h-7 w-7 text-sage" />
+            </div>
+            <div>
+              <p className="font-semibold text-charcoal">No documents yet</p>
+              <p className="mt-1 text-sm text-charcoal/45">
+                Upload a PDF or TXT to start extracting your health entities.
+              </p>
+            </div>
+            <UploadModal
+              trigger={
+                <button className="inline-flex items-center gap-2 rounded-xl bg-sage px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-sage/90">
+                  <Plus className="h-4 w-4" />
+                  Upload your first document
+                </button>
+              }
+            />
+          </div>
+        )}
+
+        {/* Document grid */}
+        {!loading && documents.length > 0 && (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {documents.map((doc) => {
+              const isPdf = doc.file_type.includes("pdf");
+              const Icon = isPdf ? FileType : FileText;
+              return (
+                <article
+                  key={doc.id}
+                  className="group flex flex-col gap-3 rounded-2xl border border-border bg-card p-5 shadow-sm transition-shadow hover:shadow-md"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sage/10">
+                      <Icon className="h-5 w-5 text-sage" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-charcoal">
+                        {doc.file_name}
+                      </p>
+                      <p className="text-xs text-charcoal/40">
+                        {formatDate(doc.created_at)}
+                      </p>
+                    </div>
+                  </div>
+                  {doc.content && (
+                    <p className="line-clamp-3 text-xs leading-relaxed text-charcoal/50">
+                      {doc.content.slice(0, 160)}
+                    </p>
+                  )}
+                  {!doc.content && (
+                    <p className="text-xs italic text-charcoal/30">
+                      No text extracted.
+                    </p>
+                  )}
+                  <div className="flex items-center gap-1.5">
+                    <span className="rounded-full border border-border px-2 py-0.5 text-xs text-charcoal/40">
+                      {isPdf ? "PDF" : "TXT"}
+                    </span>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

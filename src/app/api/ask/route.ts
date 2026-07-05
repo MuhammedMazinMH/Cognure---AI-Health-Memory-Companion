@@ -56,58 +56,160 @@ export async function POST(request: Request) {
     // 3) Recall context from Cognee, then generate a grounded answer.
     console.log("[ask] Recalling context...");
     const recall = await cogneeRecall(question);
-    console.log(`[ask] ✓ Context length: ${recall.context.length} chars`);
+    console.log(`[ask] ✓ Cognee context length: ${recall.context.length} chars`);
 
     let context = recall.context;
-    
+
     // Fallback: If Cognee returns empty context, search Supabase memories table
+    // directly using keyword matching on the stored text and entity names.
     if (!context || context.trim().length === 0) {
-      console.log("[ask] Cognee returned empty context, trying Supabase fallback...");
-      
-      // Extract keywords from question (split on whitespace, filter short words)
-      const keywords = question
-        .toLowerCase()
-        .split(/\s+/)
-        .filter((word) => word.length >= 3);
-      
-      console.log(`[ask] Extracted keywords:`, keywords);
+      console.log("[ask] Cognee returned empty context, searching Supabase memories...");
 
-      if (keywords.length > 0) {
-        // Build OR conditions for ILIKE search
-        const orConditions = keywords
-          .map((kw) => `text.ilike.%${kw}%,entities.cs.{"name":"${kw}"}`)
-          .join(",");
+      // Pull ALL memories for this user (memories are user-scoped and typically
+      // small in number, so fetching all and filtering in JS is safe and avoids
+      // broken PostgREST JSONB array syntax).
+      const { data: allMemories, error: memoryError } = await supabase
+        .from("memories")
+        .select("id, text, entities")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
 
-        const { data: memories, error: memoryError } = await supabase
-          .from("memories")
-          .select("*")
-          .eq("user_id", user.id)
-          .or(orConditions)
-          .order("created_at", { ascending: false })
-          .limit(10);
+      if (memoryError) {
+        console.log("[ask] ❌ Supabase memories query error:", memoryError.message);
+      }
 
-        if (!memoryError && memories && memories.length > 0) {
-          console.log(`[ask] ✓ Found ${memories.length} memories in fallback`);
-          // Build context from found memories
-          context = memories.map((m: { text: string }) => m.text).join("\n\n");
+      if (!memoryError && allMemories && allMemories.length > 0) {
+        // Extract meaningful keywords from the question (length >= 3, skip
+        // common stop words so "are", "the", "what" don't pollute the search).
+        const STOP_WORDS = new Set([
+          "are", "the", "what", "which", "when", "how", "many", "much",
+          "did", "does", "have", "has", "had", "been", "was", "were",
+          "can", "could", "should", "would", "will", "may", "might",
+          "for", "and", "but", "not", "you", "your", "that", "this",
+          "with", "from", "any", "all", "some", "there", "about",
+          "its", "our", "they", "them", "their",
+        ]);
+
+        const keywords = question
+          .toLowerCase()
+          .replace(/[^a-z0-9\s]/g, " ")
+          .split(/\s+/)
+          .filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
+
+        console.log(`[ask] Keywords for memory search:`, keywords);
+
+        type MemoryRow = {
+          id: string;
+          text: string;
+          entities: Array<{ name: string; type: string; confidence: number }>;
+        };
+
+        // Score each memory by how many keywords it matches (in text OR in
+        // entity names). Return only memories with at least one match.
+        const scored = (allMemories as MemoryRow[])
+          .map((mem) => {
+            const textLower = (mem.text ?? "").toLowerCase();
+            const entityNames = (mem.entities ?? [])
+              .map((e) => e.name.toLowerCase())
+              .join(" ");
+            const searchable = `${textLower} ${entityNames}`;
+
+            const hits = keywords.filter((kw) => searchable.includes(kw)).length;
+            return { mem, hits };
+          })
+          .filter(({ hits }) => hits > 0)
+          .sort((a, b) => b.hits - a.hits)
+          .slice(0, 10);
+
+        if (scored.length > 0) {
+          console.log(`[ask] ✓ Found ${scored.length} relevant memories in Supabase`);
+          // Build context: include both the raw text and any entity names/types
+          // so Groq has rich structured info to answer from.
+          context = scored
+            .map(({ mem }) => {
+              const entitySummary =
+                mem.entities && mem.entities.length > 0
+                  ? `\nEntities: ${mem.entities.map((e) => `${e.name} (${e.type})`).join(", ")}`
+                  : "";
+              return `${mem.text}${entitySummary}`;
+            })
+            .join("\n\n---\n\n");
         } else {
-          console.log("[ask] No memories found in fallback search");
-          
-          // Check if user has any documents at all
-          const { data: documents, error: docError } = await supabase
-            .from("documents")
-            .select("id")
-            .eq("user_id", user.id)
-            .limit(1);
-
-          if (!docError && documents && documents.length > 0) {
-            // User has documents but no memories extracted
-            context = "I can see your documents, but I need to extract the medical details first. Please go to Documents and click 'Memorize' on each uploaded file.";
+          // No keyword match — try returning all memories as broad context
+          // so Groq can still attempt an answer from everything the user stored.
+          if (keywords.length === 0) {
+            console.log("[ask] No keywords extracted; using all memories as context");
+            context = (allMemories as MemoryRow[])
+              .slice(0, 10)
+              .map((m) => m.text)
+              .join("\n\n---\n\n");
           } else {
-            // User has no documents at all
-            context = "I don't have any medical documents yet. Upload some documents to get started!";
+            console.log("[ask] No keyword-matching memories found");
+
+            // Check if user has documents that haven't been memorized yet.
+            const { data: documents } = await supabase
+              .from("documents")
+              .select("id")
+              .eq("user_id", user.id)
+              .limit(1);
+
+            if (documents && documents.length > 0) {
+              context =
+                "I can see your documents, but I haven't been able to find the specific information you're asking about. " +
+                "Try re-uploading your document and clicking 'Memorize' again.";
+            } else {
+              context =
+                "I don't have any medical documents yet. Upload some documents and click 'Memorize' to get started!";
+            }
           }
         }
+      } else {
+        // No memories at all in the database for this user.
+        console.log("[ask] No memories found in Supabase for this user");
+
+        const { data: documents } = await supabase
+          .from("documents")
+          .select("id")
+          .eq("user_id", user.id)
+          .limit(1);
+
+        if (documents && documents.length > 0) {
+          context =
+            "I can see your documents, but I haven't extracted the details yet. " +
+            "Please click 'Memorize' on your uploaded files so I can learn from them.";
+        } else {
+          context =
+            "I don't have any medical documents yet. Upload a document and click 'Memorize' to get started!";
+        }
+      }
+    }
+
+    // If the question is about medications, append any known interaction
+    // warnings to the context so Groq can surface them in the answer.
+    const questionLower = question.toLowerCase();
+    const isMedQuestion =
+      questionLower.includes("medication") ||
+      questionLower.includes("drug") ||
+      questionLower.includes("pill") ||
+      questionLower.includes("interact") ||
+      questionLower.includes("medicine") ||
+      questionLower.includes("prescri");
+
+    if (isMedQuestion) {
+      const { data: interactions } = await supabase
+        .from("medication_interactions")
+        .select("medications, severity, description")
+        .eq("user_id", user.id);
+
+      if (interactions && interactions.length > 0) {
+        const warningText = interactions
+          .map(
+            (i: { medications: string[]; severity: string; description: string }) =>
+              `INTERACTION WARNING (${i.severity}): ${i.medications.join(" + ")} — ${i.description}`
+          )
+          .join("\n");
+        context = `${context}\n\n--- Medication Interaction Warnings ---\n${warningText}`;
+        console.log(`[ask] Appended ${interactions.length} interaction warning(s) to context`);
       }
     }
 

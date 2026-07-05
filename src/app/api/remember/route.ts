@@ -9,7 +9,7 @@
 
 import { NextResponse } from "next/server";
 import { cogneeRemember } from "@/lib/cognee-client";
-import { extractEntities } from "@/lib/groq-client";
+import { extractEntities, checkInteractions } from "@/lib/groq-client";
 import { getServerSupabase, getTokenFromRequest } from "@/lib/supabase-client";
 
 export const runtime = "nodejs";
@@ -187,7 +187,53 @@ export async function POST(request: Request) {
 
     console.log(`[remember] Entity counts:`, count);
 
-    // 5) Save the memory in our own database too.
+    // 5) Check for medication interactions if ≥2 medications were found.
+    const medicationNames = entities
+      .filter((e) => e.type === "medication")
+      .map((e) => e.name);
+
+    let interactionWarnings: {
+      medications: string[];
+      severity: string;
+      description: string;
+    }[] = [];
+    let interactionSummary = "";
+
+    if (medicationNames.length >= 2) {
+      console.log(`[remember] Checking interactions for ${medicationNames.length} medications...`);
+      try {
+        const interactionResult = await checkInteractions(medicationNames);
+        interactionWarnings = interactionResult.interactions;
+        interactionSummary = interactionResult.summary;
+
+        if (interactionResult.hasInteractions && interactionWarnings.length > 0) {
+          console.log(`[remember] ⚠️ Found ${interactionWarnings.length} medication interaction(s)`);
+
+          // Persist to medication_interactions table so the graph can show badges.
+          const interactionRows = interactionWarnings.map((w) => ({
+            user_id: user.id,
+            document_id: documentId,
+            medications: w.medications,
+            severity: w.severity,
+            description: w.description,
+          }));
+
+          const { error: intError } = await supabase
+            .from("medication_interactions")
+            .upsert(interactionRows, { onConflict: "user_id,medications" });
+
+          if (intError) {
+            // Non-fatal: log and continue.
+            console.log("[remember] ⚠️ Could not save interactions:", intError.message);
+          }
+        }
+      } catch (err) {
+        // Interaction check is best-effort; never let it block the memory save.
+        console.log("[remember] ⚠️ Interaction check failed (non-fatal):", err);
+      }
+    }
+
+    // 6) Save the memory in our own database too.
     console.log("[remember] Saving to memories table...");
     const { data: memory, error: insertError } = await supabase
       .from("memories")
@@ -218,6 +264,8 @@ export async function POST(request: Request) {
       memoryId: memory.id,
       entities,
       count,
+      interactions: interactionWarnings,
+      interactionSummary,
     });
   } catch (error) {
     const elapsed = Date.now() - startTime;
