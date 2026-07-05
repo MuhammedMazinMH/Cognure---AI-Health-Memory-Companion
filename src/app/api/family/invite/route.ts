@@ -7,9 +7,17 @@
 
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
+import { createClient } from "@supabase/supabase-js";
 import { getServerSupabase, getTokenFromRequest } from "@/lib/supabase-client";
 
 export const runtime = "nodejs";
+
+// Service-role client bypasses RLS for table writes.
+// We still verify the user via the anon client so auth is always enforced.
+const serviceSupabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -19,6 +27,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Verify identity with the user-scoped client (anon key + JWT).
   const supabase = getServerSupabase(token);
 
   const {
@@ -54,7 +63,8 @@ export async function POST(request: Request) {
   }
 
   // Prevent duplicate active invites for the same email.
-  const { data: existing } = await supabase
+  // Use serviceSupabase so RLS does not block the lookup.
+  const { data: existing } = await serviceSupabase
     .from("family_shares")
     .select("id")
     .eq("owner_user_id", user.id)
@@ -72,7 +82,7 @@ export async function POST(request: Request) {
   // even if the column has no database-level default.
   const accessToken = randomUUID();
 
-  const { data: share, error: insertError } = await supabase
+  const { data: share, error: insertError } = await serviceSupabase
     .from("family_shares")
     .insert({
       owner_user_id: user.id,

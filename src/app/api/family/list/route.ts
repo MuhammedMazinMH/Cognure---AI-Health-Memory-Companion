@@ -3,9 +3,16 @@
 // Returns: { shares: [...] }
 
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { getServerSupabase, getTokenFromRequest } from "@/lib/supabase-client";
 
 export const runtime = "nodejs";
+
+// Service-role client bypasses RLS for table reads.
+const serviceSupabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function GET(request: Request) {
   const token = getTokenFromRequest(request);
@@ -13,6 +20,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Verify identity with the user-scoped client (anon key + JWT).
   const supabase = getServerSupabase(token);
 
   const {
@@ -24,7 +32,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: shares, error } = await supabase
+  const { data: shares, error } = await serviceSupabase
     .from("family_shares")
     .select("id, shared_email, status, access_token, created_at, expires_at")
     .eq("owner_user_id", user.id)

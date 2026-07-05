@@ -5,9 +5,16 @@
 // Returns: { success: true }
 
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { getServerSupabase, getTokenFromRequest } from "@/lib/supabase-client";
 
 export const runtime = "nodejs";
+
+// Service-role client bypasses RLS for table deletes.
+const serviceSupabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE_KEY!
+);
 
 export async function POST(request: Request) {
   const token = getTokenFromRequest(request);
@@ -15,6 +22,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Verify identity with the user-scoped client (anon key + JWT).
   const supabase = getServerSupabase(token);
 
   const {
@@ -38,11 +46,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "A share id is required." }, { status: 400 });
   }
 
-  const { error } = await supabase
+  // owner_user_id filter ensures only the owner can ever delete their own shares,
+  // even with the service role client.
+  const { error } = await serviceSupabase
     .from("family_shares")
     .delete()
     .eq("id", shareId)
-    .eq("owner_user_id", user.id); // Owner-scoped: only the owner can revoke.
+    .eq("owner_user_id", user.id);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
