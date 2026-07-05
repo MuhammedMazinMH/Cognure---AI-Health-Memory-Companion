@@ -12,7 +12,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -37,7 +36,7 @@ export function Header({ onToggleSidebar }: HeaderProps) {
 
   async function handleLogout() {
     await supabase.auth.signOut();
-    router.push("/login");
+    router.push("/");
     router.refresh();
   }
 
@@ -84,19 +83,20 @@ export function Header({ onToggleSidebar }: HeaderProps) {
           >
             {initials}
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel className="font-normal">
-              <div className="flex flex-col gap-0.5">
+          <DropdownMenuContent align="end" className="w-60">
+            {/* User info — plain div, not a menu item, so it never crashes on click */}
+            <div className="flex flex-col gap-0.5 px-2 py-2">
+              {fullName && (
                 <p className="truncate text-sm font-semibold text-charcoal">
-                  {fullName || "My Account"}
+                  {fullName}
                 </p>
-                <p className="truncate text-xs text-charcoal/45">{email}</p>
-              </div>
-            </DropdownMenuLabel>
+              )}
+              <p className="truncate text-xs text-charcoal/50">{email}</p>
+            </div>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => router.push("/dashboard/settings")}
-              className="flex cursor-pointer items-center gap-2 text-sm"
+              className="cursor-pointer gap-2 text-sm"
             >
               <User className="h-4 w-4" />
               Settings
@@ -104,10 +104,10 @@ export function Header({ onToggleSidebar }: HeaderProps) {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={handleLogout}
-              className="flex cursor-pointer items-center gap-2 text-sm text-coral focus:text-coral"
+              className="cursor-pointer gap-2 text-sm text-coral"
             >
               <LogOut className="h-4 w-4" />
-              Sign out
+              Logout
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
