@@ -3,16 +3,13 @@
 // Returns: { shares: [...] }
 
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { getServerSupabase, getTokenFromRequest } from "@/lib/supabase-client";
+import {
+  getServerSupabase,
+  getServiceRoleSupabase,
+  getTokenFromRequest,
+} from "@/lib/supabase-client";
 
 export const runtime = "nodejs";
-
-// Service-role client bypasses RLS for table reads.
-const serviceSupabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 export async function GET(request: Request) {
   const token = getTokenFromRequest(request);
@@ -22,6 +19,8 @@ export async function GET(request: Request) {
 
   // Verify identity with the user-scoped client (anon key + JWT).
   const supabase = getServerSupabase(token);
+  // Service-role client bypasses RLS for table reads (created at request time).
+  const serviceSupabase = getServiceRoleSupabase(token);
 
   const {
     data: { user },

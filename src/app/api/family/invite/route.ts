@@ -7,17 +7,13 @@
 
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import { createClient } from "@supabase/supabase-js";
-import { getServerSupabase, getTokenFromRequest } from "@/lib/supabase-client";
+import {
+  getServerSupabase,
+  getServiceRoleSupabase,
+  getTokenFromRequest,
+} from "@/lib/supabase-client";
 
 export const runtime = "nodejs";
-
-// Service-role client bypasses RLS for table writes.
-// We still verify the user via the anon client so auth is always enforced.
-const serviceSupabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-);
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -29,6 +25,8 @@ export async function POST(request: Request) {
 
   // Verify identity with the user-scoped client (anon key + JWT).
   const supabase = getServerSupabase(token);
+  // Service-role client bypasses RLS for table writes (created at request time).
+  const serviceSupabase = getServiceRoleSupabase(token);
 
   const {
     data: { user },

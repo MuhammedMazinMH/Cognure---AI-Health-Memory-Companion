@@ -88,6 +88,45 @@ export function getServerSupabase(accessToken?: string): SupabaseClient {
 }
 
 /**
+ * Returns a Supabase client for SERVER-SIDE operations that need to bypass RLS.
+ * Used in API routes to perform admin-level table operations (e.g., family sharing
+ * management) while still verifying the user's identity via the accessToken.
+ *
+ * IMPORTANT: This uses the SERVICE ROLE KEY which bypasses Row Level Security.
+ * The SERVICE ROLE KEY is a server secret — it is never sent to the browser.
+ * Always verify the user's identity (via accessToken or session) before using
+ * this client, and always filter queries by user_id to ensure data safety.
+ *
+ * @param accessToken - (Optional) The user's JWT token. If provided, this client
+ *   will include the token in requests, which allows RLS to still apply based on
+ *   the user identity. If omitted, the client performs unfiltered operations.
+ *   For most family-sharing operations, pass the accessToken even with service role.
+ */
+export function getServiceRoleSupabase(
+  accessToken?: string
+): SupabaseClient {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!serviceRoleKey) {
+    // Fall back gracefully — at build time, SERVICE_ROLE_KEY won't be set,
+    // but that's OK because this is only called from API routes at runtime.
+    // We return a regular client so the build succeeds; the actual key will
+    // be available when the route is invoked.
+    console.warn("[Supabase] SERVICE_ROLE_KEY not set; using anon key as fallback");
+    return getServerSupabase(accessToken);
+  }
+
+  return createClient(safeUrl, serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+    global: accessToken
+      ? { headers: { Authorization: `Bearer ${accessToken}` } }
+      : undefined,
+  });
+}
+
+/**
  * Small helper used by API routes to read the access token out of the
  * incoming request's `Authorization: Bearer <token>` header.
  * Returns undefined if there is no token.
