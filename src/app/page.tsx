@@ -88,7 +88,7 @@ function Hero() {
         </div>
 
         {/* Headline */}
-        <h1 className="font-heading text-5xl font-bold leading-[1.1] tracking-tight text-charcoal text-balance sm:text-6xl lg:text-7xl">
+        <h1 className="font-heading text-5xl font-bold leading-[1.1] tracking-tight text-charcoal text-balance sm:text-6xl lg:text-7xl [font-variant-ligatures:none]">
           Your health history,
           <br />
           finally{" "}
