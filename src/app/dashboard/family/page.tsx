@@ -2,14 +2,15 @@
 
 // Family Sharing page.
 // Lets the current user invite trusted contacts (by email) to view their
-// health memory. Access is read-only for invitees.
-// Data is stored in the `family_shares` Supabase table.
+// health memory in read-only mode. Each invite creates a shareable link
+// backed by the `family_shares` Supabase table.
 
 import { useEffect, useState, useCallback } from "react";
 import { getBrowserSupabase } from "@/lib/supabase-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   UserPlus,
   Users,
@@ -18,6 +19,9 @@ import {
   AlertCircle,
   Mail,
   Clock,
+  Link2,
+  Check,
+  Copy,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -26,7 +30,9 @@ interface FamilyShare {
   id: string;
   shared_email: string;
   status: "pending" | "active" | "revoked";
+  access_token: string;
   created_at: string;
+  expires_at: string | null;
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -43,34 +49,36 @@ export default function FamilyPage() {
   const [inviting, setInviting] = useState(false);
   const [inviteError, setInviteError] = useState<string | null>(null);
   const [inviteSuccess, setInviteSuccess] = useState(false);
-
-  // Stores the email that was just successfully invited (used in success toast).
   const [sentEmail, setSentEmail] = useState("");
-  // Revoke state — tracks which share id is being deleted.
+
+  // Revoke + copy state.
   const [revoking, setRevoking] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // Fetches the current share list from the API.
   const loadShares = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) {
         setError("Please sign in.");
         setLoading(false);
         return;
       }
 
-      const res = await fetch("/api/family", {
+      const res = await fetch("/api/family/list", {
         headers: { Authorization: `Bearer ${session.access_token}` },
       });
 
       if (!res.ok) {
-        const d = await res.json();
+        const d = (await res.json()) as { error?: string };
         throw new Error(d.error || "Failed to load family members");
       }
 
-      const data = await res.json();
+      const data = (await res.json()) as { shares?: FamilyShare[] };
       setShares(data.shares ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load data");
@@ -79,7 +87,9 @@ export default function FamilyPage() {
     }
   }, [supabase]);
 
-  useEffect(() => { loadShares(); }, [loadShares]);
+  useEffect(() => {
+    loadShares();
+  }, [loadShares]);
 
   // Send an invite.
   async function handleInvite(e: React.FormEvent) {
@@ -95,35 +105,30 @@ export default function FamilyPage() {
     }
 
     setInviting(true);
-
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) throw new Error("Not signed in.");
 
-      const res = await fetch("/api/family", {
+      const res = await fetch("/api/family/invite", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ email: inviteEmail }),
+        body: JSON.stringify({ email: inviteEmail.trim() }),
       });
 
       const data = (await res.json()) as { error?: string };
       if (!res.ok) {
-        // Provide a friendly message when the DB table hasn't been created yet.
-        const msg = data.error ?? "Failed to invite";
-        if (msg.toLowerCase().includes("family_shares") || msg.toLowerCase().includes("does not exist") || msg.toLowerCase().includes("schema cache")) {
-          throw new Error("Family sharing setup is in progress. Please refresh the page and try again.");
-        }
-        throw new Error(msg);
+        throw new Error(data.error ?? "Failed to invite");
       }
 
       const sentTo = inviteEmail.trim();
       setInviteEmail("");
-      setInviteSuccess(true);
-      // Auto-dismiss after 5 s; store sentTo for the message.
       setSentEmail(sentTo);
+      setInviteSuccess(true);
       setTimeout(() => setInviteSuccess(false), 5000);
       await loadShares();
     } catch (err) {
@@ -137,17 +142,35 @@ export default function FamilyPage() {
   async function handleRevoke(id: string) {
     setRevoking(id);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
       if (!session) return;
 
-      await fetch(`/api/family?id=${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${session.access_token}` },
+      await fetch("/api/family/revoke", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ shareId: id }),
       });
 
-      await loadShares();
+      setShares((prev) => prev.filter((s) => s.id !== id));
     } finally {
       setRevoking(null);
+    }
+  }
+
+  // Copy a share's read-only link to the clipboard.
+  async function handleCopyLink(share: FamilyShare) {
+    const url = `${window.location.origin}/shared/${share.access_token}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedId(share.id);
+      setTimeout(() => setCopiedId((cur) => (cur === share.id ? null : cur)), 2000);
+    } catch {
+      // Clipboard may be unavailable — no-op.
     }
   }
 
@@ -158,7 +181,31 @@ export default function FamilyPage() {
         day: "numeric",
         year: "numeric",
       });
-    } catch { return iso; }
+    } catch {
+      return iso;
+    }
+  }
+
+  function statusBadge(status: FamilyShare["status"]) {
+    if (status === "active") {
+      return (
+        <Badge className="rounded-full bg-sage/15 px-2.5 py-0.5 text-xs font-medium text-sage hover:bg-sage/15">
+          Active
+        </Badge>
+      );
+    }
+    if (status === "revoked") {
+      return (
+        <Badge className="rounded-full bg-coral/10 px-2.5 py-0.5 text-xs font-medium text-coral hover:bg-coral/10">
+          Revoked
+        </Badge>
+      );
+    }
+    return (
+      <Badge className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-charcoal/50 hover:bg-muted">
+        Pending
+      </Badge>
+    );
   }
 
   return (
@@ -189,13 +236,16 @@ export default function FamilyPage() {
               Invite a family member
             </h2>
             <p className="mb-4 text-sm text-charcoal/45">
-              Enter their email address. They will be able to view (but not
-              edit) your health memory.
+              Enter their email address. They will get a private link to view
+              (but not edit) your health memory.
             </p>
 
             <form onSubmit={handleInvite} className="flex items-end gap-3">
               <div className="flex-1 space-y-2">
-                <Label htmlFor="invite-email" className="text-sm font-medium text-charcoal">
+                <Label
+                  htmlFor="invite-email"
+                  className="text-sm font-medium text-charcoal"
+                >
                   Email address
                 </Label>
                 <Input
@@ -230,7 +280,8 @@ export default function FamilyPage() {
               </div>
             )}
             {inviteSuccess && (
-              <div className="mt-3 rounded-xl border border-sage/30 bg-sage/8 px-4 py-2.5 text-sm text-sage">
+              <div className="mt-3 flex items-center gap-2 rounded-xl border border-sage/30 bg-sage/8 px-4 py-2.5 text-sm text-sage">
+                <Check className="h-4 w-4 shrink-0" />
                 Invitation sent to <strong>{sentEmail}</strong>.
               </div>
             )}
@@ -254,10 +305,20 @@ export default function FamilyPage() {
               </div>
             )}
 
+            {/* Loading skeleton */}
             {loading && (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-5 w-5 animate-spin text-sage" />
-              </div>
+              <ul className="divide-y divide-border">
+                {[1, 2, 3].map((i) => (
+                  <li key={i} className="flex items-center gap-4 px-6 py-4">
+                    <div className="h-9 w-9 shrink-0 animate-pulse rounded-full bg-muted" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3.5 w-48 animate-pulse rounded-full bg-muted" />
+                      <div className="h-3 w-28 animate-pulse rounded-full bg-muted" />
+                    </div>
+                    <div className="h-5 w-14 animate-pulse rounded-full bg-muted" />
+                  </li>
+                ))}
+              </ul>
             )}
 
             {!loading && shares.length === 0 && !error && (
@@ -265,9 +326,11 @@ export default function FamilyPage() {
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sage/10">
                   <Users className="h-6 w-6 text-sage" />
                 </div>
-                <p className="text-sm font-medium text-charcoal">No one has access yet</p>
+                <p className="text-sm font-medium text-charcoal">
+                  No family members have access yet
+                </p>
                 <p className="text-xs text-charcoal/40">
-                  Invite a trusted contact using the form above.
+                  Invite someone above.
                 </p>
               </div>
             )}
@@ -275,56 +338,66 @@ export default function FamilyPage() {
             {!loading && shares.length > 0 && (
               <ul className="divide-y divide-border">
                 {shares.map((share) => (
-                  <li
-                    key={share.id}
-                    className="flex items-center gap-4 px-6 py-4"
-                  >
-                    {/* Avatar */}
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-lavender/20 text-sm font-bold text-lavender">
-                      {share.shared_email.charAt(0).toUpperCase()}
+                  <li key={share.id} className="px-6 py-4">
+                    <div className="flex items-center gap-4">
+                      {/* Avatar */}
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-lavender/20 text-sm font-bold text-lavender">
+                        {share.shared_email.charAt(0).toUpperCase()}
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <p className="flex items-center gap-1.5 truncate text-sm font-medium text-charcoal">
+                          <Mail className="h-3.5 w-3.5 text-charcoal/30" />
+                          {share.shared_email}
+                        </p>
+                        <p className="mt-0.5 flex items-center gap-1 text-xs text-charcoal/40">
+                          <Clock className="h-3 w-3" />
+                          Invited {formatDate(share.created_at)}
+                        </p>
+                      </div>
+
+                      {statusBadge(share.status)}
+
+                      {/* Revoke button */}
+                      <button
+                        onClick={() => handleRevoke(share.id)}
+                        disabled={revoking === share.id}
+                        aria-label={`Revoke access for ${share.shared_email}`}
+                        className="flex h-8 w-8 items-center justify-center rounded-lg text-charcoal/30 transition-colors hover:bg-coral/10 hover:text-coral disabled:opacity-40"
+                      >
+                        {revoking === share.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-4 w-4" />
+                        )}
+                      </button>
                     </div>
 
-                    <div className="flex-1 min-w-0">
-                      <p className="flex items-center gap-1.5 truncate text-sm font-medium text-charcoal">
-                        <Mail className="h-3.5 w-3.5 text-charcoal/30" />
-                        {share.shared_email}
-                      </p>
-                      <p className="mt-0.5 flex items-center gap-1 text-xs text-charcoal/40">
-                        <Clock className="h-3 w-3" />
-                        Invited {formatDate(share.created_at)}
-                      </p>
-                    </div>
-
-                    {/* Status badge */}
-                    <span
-                      className={
-                        share.status === "active"
-                          ? "rounded-full bg-sage/15 px-2.5 py-0.5 text-xs font-medium text-sage"
-                          : share.status === "revoked"
-                          ? "rounded-full bg-coral/10 px-2.5 py-0.5 text-xs font-medium text-coral"
-                          : "rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium text-charcoal/40"
-                      }
-                    >
-                      {share.status === "active"
-                        ? "Active"
-                        : share.status === "revoked"
-                        ? "Revoked"
-                        : "Pending"}
-                    </span>
-
-                    {/* Revoke button */}
-                    <button
-                      onClick={() => handleRevoke(share.id)}
-                      disabled={revoking === share.id}
-                      aria-label={`Revoke access for ${share.shared_email}`}
-                      className="flex h-8 w-8 items-center justify-center rounded-lg text-charcoal/30 transition-colors hover:bg-coral/10 hover:text-coral disabled:opacity-40"
-                    >
-                      {revoking === share.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="h-4 w-4" />
-                      )}
-                    </button>
+                    {/* Shareable link (only for active shares) */}
+                    {share.status === "active" && (
+                      <div className="mt-3 flex items-center gap-2 rounded-xl border border-border bg-background px-3 py-2">
+                        <Link2 className="h-3.5 w-3.5 shrink-0 text-charcoal/30" />
+                        <code className="flex-1 truncate text-xs text-charcoal/55">
+                          {`/shared/${share.access_token}`}
+                        </code>
+                        <button
+                          onClick={() => handleCopyLink(share)}
+                          className="inline-flex items-center gap-1 rounded-lg bg-sage/10 px-2.5 py-1 text-xs font-medium text-sage transition-colors hover:bg-sage/20"
+                        >
+                          {copiedId === share.id ? (
+                            <>
+                              <Check className="h-3 w-3" />
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <Copy className="h-3 w-3" />
+                              Copy link
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -334,10 +407,9 @@ export default function FamilyPage() {
           {/* Info note */}
           <div className="rounded-xl border border-border bg-sage/5 px-5 py-4 text-sm text-charcoal/55">
             <strong className="text-charcoal">About family sharing.</strong>{" "}
-            Invited contacts can view your memory graph, timeline, and chat
-            history in read-only mode. They cannot upload documents, edit
-            entities, or modify any of your data. You can revoke access at any
-            time.
+            Invited contacts open a private link to view your memory graph and
+            timeline in read-only mode. They cannot upload documents, chat, or
+            edit any of your data. You can revoke access at any time.
           </div>
         </div>
       </div>
