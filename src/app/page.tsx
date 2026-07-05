@@ -13,6 +13,7 @@ import {
   ArrowRight,
   Sparkles,
 } from "lucide-react";
+import { MedicalBackground } from "@/components/medical-background";
 
 // ---------------------------------------------------------------------------
 // Page
@@ -21,6 +22,7 @@ import {
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-background font-sans text-charcoal">
+      <MedicalBackground />
       <Nav />
       <Hero />
       <SocialProof />
@@ -79,7 +81,13 @@ function Hero() {
         className="pointer-events-none absolute left-1/2 top-24 -translate-x-1/2 h-[480px] w-[480px] rounded-full bg-sage/10 blur-3xl"
       />
 
-      <div className="relative mx-auto max-w-3xl">
+      {/* Glassmorphism card background for hero content */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 h-[600px] w-full max-w-4xl rounded-2xl bg-white/80 backdrop-blur-md shadow-xl"
+      />
+
+      <div className="relative z-10 mx-auto max-w-3xl">
         {/* Pill badge */}
         <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-sage/30 bg-sage/10 px-4 py-1.5 text-xs font-medium uppercase tracking-widest text-sage">
           <Sparkles className="h-3 w-3" />
