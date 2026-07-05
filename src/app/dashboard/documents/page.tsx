@@ -59,24 +59,12 @@ export default function DocumentsPage() {
     <div className="flex h-full flex-col">
       {/* Page header */}
       <div className="border-b border-border bg-card px-6 py-5">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="font-heading text-2xl font-bold text-charcoal">Documents</h1>
-            <p className="mt-0.5 text-sm text-charcoal/50">
-              {documents.length > 0
-                ? `${documents.length} document${documents.length !== 1 ? "s" : ""} uploaded`
-                : "All your uploaded health documents live here."}
-            </p>
-          </div>
-          <UploadModal
-            trigger={
-              <button className="inline-flex items-center gap-1.5 rounded-lg bg-sage px-3.5 py-2 text-xs font-semibold text-white shadow-sm hover:bg-sage/90">
-                <Plus className="h-3.5 w-3.5" />
-                Add document
-              </button>
-            }
-          />
-        </div>
+        <h1 className="font-heading text-2xl font-bold text-charcoal">Documents</h1>
+        <p className="mt-0.5 text-sm text-charcoal/50">
+          {documents.length > 0
+            ? `${documents.length} document${documents.length !== 1 ? "s" : ""} uploaded`
+            : "All your uploaded health documents live here."}
+        </p>
       </div>
 
       {/* Content */}
