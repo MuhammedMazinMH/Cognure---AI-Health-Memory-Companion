@@ -10,7 +10,6 @@ import {
   Clock,
   FileText,
   Settings,
-  Users,
   FileBarChart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -21,7 +20,6 @@ const NAV_ITEMS = [
   { label: "Timeline", href: "/dashboard/timeline", icon: Clock },
   { label: "Documents", href: "/dashboard/documents", icon: FileText },
   { label: "Report", href: "/dashboard/report", icon: FileBarChart },
-  { label: "Family", href: "/dashboard/family", icon: Users },
   { label: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
 

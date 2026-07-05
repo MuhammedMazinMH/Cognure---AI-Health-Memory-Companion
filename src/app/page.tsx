@@ -12,7 +12,6 @@ import {
   FileText,
   ArrowRight,
   Sparkles,
-  Users,
 } from "lucide-react";
 
 // ---------------------------------------------------------------------------
@@ -273,13 +272,7 @@ const FEATURES = [
     icon: FileText,
     title: "PDF health reports",
     description:
-      "Generate a printable summary of your health history — great for bringing to a new specialist or sharing with a family member.",
-  },
-  {
-    icon: Users,
-    title: "Family sharing",
-    description:
-      "Invite a trusted person to view (but not edit) your records. Ideal for caregivers, aging parents, or managing your child's health.",
+      "Generate a printable summary of your health history — great for bringing to a new specialist or keeping your records organized.",
   },
   {
     icon: Sparkles,
@@ -353,9 +346,9 @@ const STEPS = [
   },
   {
     number: "03",
-    title: "Ask, explore, and share",
+    title: "Ask and explore",
     description:
-      "Chat with your health history, explore the timeline, generate reports, and invite family members to stay in the loop.",
+      "Chat with your health history, explore the timeline, and generate printable reports — all in one private space.",
   },
 ];
 
