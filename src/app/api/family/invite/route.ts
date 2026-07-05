@@ -7,37 +7,47 @@
 
 import { NextResponse } from "next/server";
 import { randomUUID } from "crypto";
-import {
-  getServerSupabase,
-  getServiceRoleSupabase,
-  getTokenFromRequest,
-} from "@/lib/supabase-client";
+import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+// Lazy-initialize the service role client at request time
+function getServiceRoleClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    }
+  );
+}
+
 export async function POST(request: Request) {
-  const token = getTokenFromRequest(request);
-  if (!token) {
+  const supabase = getServiceRoleClient();
+  // Get the user's access token from the Authorization header
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Verify identity with the user-scoped client (anon key + JWT).
-  const supabase = getServerSupabase(token);
-  // Service-role client bypasses RLS for table writes (created at request time).
-  const serviceSupabase = getServiceRoleSupabase(token);
+  const accessToken = authHeader.substring(7); // Remove "Bearer " prefix
 
+  // Verify the user with the service role client, passing the access token
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser();
+  } = await supabase.auth.getUser(accessToken);
 
   if (authError || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Parse + validate body.
+  // Parse + validate body
   let body: { email?: string };
   try {
     body = await request.json();
@@ -60,14 +70,21 @@ export async function POST(request: Request) {
     );
   }
 
-  // Prevent duplicate active invites for the same email.
-  // Use serviceSupabase so RLS does not block the lookup.
-  const { data: existing } = await serviceSupabase
+  // Prevent duplicate active invites for the same email
+  const { data: existing, error: lookupError } = await supabase
     .from("family_shares")
     .select("id")
     .eq("owner_user_id", user.id)
     .eq("shared_email", email)
     .maybeSingle();
+
+  if (lookupError) {
+    console.error("[family/invite] Lookup error:", lookupError);
+    return NextResponse.json(
+      { error: "Failed to check existing shares." },
+      { status: 500 }
+    );
+  }
 
   if (existing) {
     return NextResponse.json(
@@ -76,22 +93,22 @@ export async function POST(request: Request) {
     );
   }
 
-  // Generate the token ourselves so we always have one to return,
-  // even if the column has no database-level default.
-  const accessToken = randomUUID();
+  // Generate the access token for the shared link
+  const shareAccessToken = randomUUID();
 
-  const { data: share, error: insertError } = await serviceSupabase
+  const { data: share, error: insertError } = await supabase
     .from("family_shares")
     .insert({
       owner_user_id: user.id,
       shared_email: email,
       status: "active",
-      access_token: accessToken,
+      access_token: shareAccessToken,
     })
     .select("id, shared_email, status, access_token")
     .single();
 
   if (insertError) {
+    console.error("[family/invite] Insert error:", insertError);
     if (
       insertError.code === "42P01" ||
       insertError.message.includes("does not exist") ||

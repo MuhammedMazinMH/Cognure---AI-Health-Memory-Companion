@@ -3,41 +3,52 @@
 // Returns: { shares: [...] }
 
 import { NextResponse } from "next/server";
-import {
-  getServerSupabase,
-  getServiceRoleSupabase,
-  getTokenFromRequest,
-} from "@/lib/supabase-client";
+import { createClient } from "@supabase/supabase-js";
 
 export const runtime = "nodejs";
 
+// Lazy-initialize the service role client at request time
+function getServiceRoleClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    }
+  );
+}
+
 export async function GET(request: Request) {
-  const token = getTokenFromRequest(request);
-  if (!token) {
+  const supabase = getServiceRoleClient();
+  // Get the user's access token from the Authorization header
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader?.startsWith("Bearer ")) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Verify identity with the user-scoped client (anon key + JWT).
-  const supabase = getServerSupabase(token);
-  // Service-role client bypasses RLS for table reads (created at request time).
-  const serviceSupabase = getServiceRoleSupabase(token);
+  const accessToken = authHeader.substring(7); // Remove "Bearer " prefix
 
+  // Verify the user with the service role client, passing the access token
   const {
     data: { user },
     error: authError,
-  } = await supabase.auth.getUser();
+  } = await supabase.auth.getUser(accessToken);
 
   if (authError || !user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { data: shares, error } = await serviceSupabase
+  const { data: shares, error } = await supabase
     .from("family_shares")
     .select("id, shared_email, status, access_token, created_at, expires_at")
     .eq("owner_user_id", user.id)
     .order("created_at", { ascending: false });
 
   if (error) {
+    console.error("[family/list] Query error:", error);
     if (
       error.code === "42P01" ||
       error.message.includes("does not exist") ||
