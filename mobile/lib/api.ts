@@ -110,12 +110,16 @@ export async function askQuestion(question: string): Promise<AskResponse> {
   return request<AskResponse>("/api/ask", { method: "POST", body: { question } });
 }
 
-/** POST /api/upload — upload a document (text content extracted client-side). */
+/**
+ * POST /api/upload — upload a document.
+ * `extractedText` is only sent for PDFs (extracted client-side, same as web);
+ * for TXT files the server reads the text itself.
+ */
 export async function uploadDocument(
   fileName: string,
   mimeType: string,
   fileUri: string,
-  extractedText: string
+  extractedText?: string
 ): Promise<Document> {
   const formData = new FormData();
   // React Native FormData file part: { uri, name, type } object.
@@ -124,7 +128,9 @@ export async function uploadDocument(
     name: fileName,
     type: mimeType,
   } as unknown as Blob);
-  formData.append("content", extractedText);
+  if (extractedText !== undefined) {
+    formData.append("content", extractedText);
+  }
 
   const json = await request<{ document: Document }>("/api/upload", {
     method: "POST",
