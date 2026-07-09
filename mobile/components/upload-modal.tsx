@@ -226,7 +226,7 @@ export function UploadModal({ visible, onClose, onSuccess }: UploadModalProps) {
 
       let extractedText: string | undefined;
       if (isPdf) {
-        const base64 = new File(asset.uri).base64();
+        const base64 = await new File(asset.uri).base64();
         if (!extractorRef.current) {
           throw new Error("PDF reader is not ready yet. Please try again.");
         }

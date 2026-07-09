@@ -3,13 +3,13 @@
 
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Header } from "../../components/header";
+import { ScreenHeader } from "../../components/screen-header";
 import { colors, fonts } from "../../lib/theme";
 
 export default function ChatScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <Header title="Chat" subtitle="Ask questions about your health history" />
+      <ScreenHeader title="Chat" subtitle="Ask questions about your health history" />
       <View style={styles.empty}>
         <Text style={styles.emptyTitle}>Chat is coming next</Text>
         <Text style={styles.emptyBody}>

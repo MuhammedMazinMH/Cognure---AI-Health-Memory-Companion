@@ -4,7 +4,7 @@
 
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Header } from "../../components/header";
+import { ScreenHeader } from "../../components/screen-header";
 import { ErrorState, LoadingState } from "../../components/ui";
 import { fetchMemories } from "../../lib/api";
 import { useApiData } from "../../lib/use-api-data";
@@ -18,13 +18,14 @@ export default function GraphScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <Header
+      <ScreenHeader
         title="Memory Graph"
         subtitle={
           memories && memories.length > 0
             ? `${entityCount} entities across ${memories.length} memories`
             : "Your connected health memory"
         }
+        onMemoryAdded={refetch}
       />
       {loading ? (
         <LoadingState label="Loading your memories…" />
@@ -34,8 +35,8 @@ export default function GraphScreen() {
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>No memories yet</Text>
           <Text style={styles.emptyBody}>
-            Add your first memory from the Documents tab and Cognure will build
-            your health graph from it.
+            Tap &ldquo;Add Memory&rdquo; above to upload a document — Cognure
+            will build your health graph from it.
           </Text>
         </View>
       ) : (

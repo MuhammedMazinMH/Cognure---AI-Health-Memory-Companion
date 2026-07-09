@@ -3,7 +3,7 @@
 
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Header } from "../../components/header";
+import { ScreenHeader } from "../../components/screen-header";
 import { ErrorState, LoadingState } from "../../components/ui";
 import { fetchMemories } from "../../lib/api";
 import { useApiData } from "../../lib/use-api-data";
@@ -14,13 +14,14 @@ export default function TimelineScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <Header
+      <ScreenHeader
         title="Timeline"
         subtitle={
           memories && memories.length > 0
             ? `${memories.length} entries in your health history`
             : "Your health history in order"
         }
+        onMemoryAdded={refetch}
       />
       {loading ? (
         <LoadingState label="Loading your timeline…" />

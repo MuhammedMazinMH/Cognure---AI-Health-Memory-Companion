@@ -1,10 +1,10 @@
-// Documents tab — mirrors web /dashboard/documents. Step 2: real data wiring
-// with loading/error/empty states; upload flow is built in Step 3.
+// Documents tab — mirrors web /dashboard/documents: document list with the
+// header "Add Memory" upload flow (pick file → extract → upload → memorize).
 
 import { FlatList, RefreshControl, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { FileText } from "lucide-react-native";
-import { Header } from "../../components/header";
+import { ScreenHeader } from "../../components/screen-header";
 import { ErrorState, LoadingState } from "../../components/ui";
 import { fetchDocuments } from "../../lib/api";
 import { useApiData } from "../../lib/use-api-data";
@@ -43,13 +43,14 @@ export default function DocumentsScreen() {
 
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <Header
+      <ScreenHeader
         title="Documents"
         subtitle={
           documents && documents.length > 0
             ? `${documents.length} document${documents.length !== 1 ? "s" : ""} uploaded`
             : "All your uploaded health documents live here."
         }
+        onMemoryAdded={refetch}
       />
       {loading ? (
         <LoadingState label="Loading your documents…" />
@@ -59,8 +60,8 @@ export default function DocumentsScreen() {
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>No documents yet</Text>
           <Text style={styles.emptyBody}>
-            Upload your first health document and Cognure will remember it for
-            you. The upload flow arrives in the next build step.
+            Tap &ldquo;Add Memory&rdquo; above to upload your first health
+            document — Cognure will read it and remember it for you.
           </Text>
         </View>
       ) : (

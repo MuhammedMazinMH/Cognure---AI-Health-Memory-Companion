@@ -3,13 +3,13 @@
 
 import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Header } from "../../components/header";
+import { ScreenHeader } from "../../components/screen-header";
 import { colors, fonts } from "../../lib/theme";
 
 export default function ReportScreen() {
   return (
     <SafeAreaView style={styles.safe} edges={["top"]}>
-      <Header title="Report" subtitle="Generate a summary of your health history" />
+      <ScreenHeader title="Report" subtitle="Generate a summary of your health history" />
       <View style={styles.empty}>
         <Text style={styles.emptyTitle}>Reports are coming soon</Text>
         <Text style={styles.emptyBody}>
