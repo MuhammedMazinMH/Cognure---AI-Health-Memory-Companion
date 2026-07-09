@@ -145,3 +145,69 @@ const bannerStyles = StyleSheet.create({
     fontSize: 14,
   },
 });
+
+// ── Full-screen data states (loading spinner / error with retry) ──
+
+export function LoadingState({ label = "Loading…" }: { label?: string }) {
+  return (
+    <View style={stateStyles.wrap}>
+      <ActivityIndicator size="large" color={colors.sage} />
+      <Text style={stateStyles.label}>{label}</Text>
+    </View>
+  );
+}
+
+export function ErrorState({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry: () => void;
+}) {
+  return (
+    <View style={stateStyles.wrap}>
+      <Text style={stateStyles.errorText}>{message}</Text>
+      <Pressable
+        accessibilityRole="button"
+        onPress={onRetry}
+        style={({ pressed }) => [stateStyles.retry, pressed && { opacity: 0.9 }]}
+      >
+        <Text style={stateStyles.retryText}>Try again</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+const stateStyles = StyleSheet.create({
+  wrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    padding: 24,
+  },
+  label: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.mutedForeground,
+  },
+  errorText: {
+    fontFamily: fonts.body,
+    fontSize: 14,
+    color: colors.coral,
+    textAlign: "center",
+  },
+  retry: {
+    height: 40,
+    paddingHorizontal: 20,
+    borderRadius: radius.xl,
+    backgroundColor: colors.sage,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  retryText: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 13.5,
+    color: "#ffffff",
+  },
+});

@@ -25,7 +25,7 @@ export default function Index() {
   }
 
   return session ? (
-    <Redirect href="/dashboard" />
+    <Redirect href="/(tabs)" />
   ) : (
     <Redirect href="/login" />
   );

@@ -86,3 +86,36 @@ export interface ChatMessage {
   context?: string;
   created_at: string;
 }
+
+// ---------------------------------------------------------------------------
+// API response shapes — mirrored from the web route handlers and components.
+// ---------------------------------------------------------------------------
+
+/**
+ * A known interaction between two or more of the user's medications.
+ * Mirrors `MedInteraction` in the web memory-graph component and the
+ * `medication_interactions` table selected by /api/interactions.
+ */
+export interface MedInteraction {
+  id: string;
+  medications: string[];
+  severity: string;
+  description: string;
+  created_at?: string;
+}
+
+/** Response of POST /api/ask. */
+export interface AskResponse {
+  answer: string;
+  context: string;
+}
+
+/** Response of POST /api/remember. */
+export interface RememberResponse {
+  success: boolean;
+  memoryId: string;
+  entities: HealthEntity[];
+  count: number;
+  interactions: MedInteraction[];
+  interactionSummary: string | null;
+}
