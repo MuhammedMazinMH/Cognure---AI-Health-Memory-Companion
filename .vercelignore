@@ -1,0 +1,3 @@
+# Expo / React Native mobile app — built and deployed independently.
+# Vercel only builds the Next.js web application at the repo root.
+mobile
