@@ -1,6 +1,6 @@
 // Root layout: loads the Cognure brand fonts (Playfair Display + Inter, same
 // as the web app's next/font setup) and provides the Supabase session to the
-// whole app. Route protection lives in app/index.tsx and the group layouts.
+// whole app. Route protection lives in the (tabs) and (auth) group layouts.
 
 import { useEffect } from "react";
 import { View } from "react-native";

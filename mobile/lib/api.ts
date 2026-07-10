@@ -53,7 +53,12 @@ async function getAccessToken(): Promise<string> {
  */
 async function request<T>(
   path: string,
-  options: { method?: "GET" | "POST"; body?: unknown; formData?: FormData } = {}
+  options: {
+    method?: "GET" | "POST";
+    body?: unknown;
+    formData?: FormData;
+    timeoutMs?: number;
+  } = {}
 ): Promise<T> {
   const token = await getAccessToken();
 
@@ -65,11 +70,30 @@ async function request<T>(
     headers["Content-Type"] = "application/json";
   }
 
-  const response = await fetch(`${API_URL}${path}`, {
-    method: options.method ?? "GET",
-    headers,
-    body: options.formData ?? (options.body ? JSON.stringify(options.body) : undefined),
-  });
+  // Abort the request if it hangs. Uploads/AI extraction can be slow, so the
+  // ceiling is generous (60s) but still prevents an indefinite spinner.
+  const controller = new AbortController();
+  const timeoutMs = options.timeoutMs ?? 60000;
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, {
+      method: options.method ?? "GET",
+      headers,
+      body: options.formData ?? (options.body ? JSON.stringify(options.body) : undefined),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    // Distinguish a timeout abort from a genuine connectivity failure so the
+    // UI can show the right message.
+    if (err instanceof Error && err.name === "AbortError") {
+      throw new ApiError("The request timed out. Please try again.", 408);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   let json: Record<string, unknown> = {};
   try {

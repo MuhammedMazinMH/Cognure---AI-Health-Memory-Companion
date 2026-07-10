@@ -37,7 +37,18 @@ export function Header({ title, subtitle, action }: HeaderProps) {
 
   async function handleSignOut() {
     setMenuOpen(false);
-    await getSupabase().auth.signOut();
+    try {
+      const { error } = await getSupabase().auth.signOut();
+      // If the network revoke failed, still clear the local session so no
+      // authenticated state is left behind on the device.
+      if (error) {
+        await getSupabase().auth.signOut({ scope: "local" });
+      }
+    } catch {
+      await getSupabase()
+        .auth.signOut({ scope: "local" })
+        .catch(() => {});
+    }
     router.replace("/login");
   }
 
@@ -80,12 +91,22 @@ export function Header({ title, subtitle, action }: HeaderProps) {
               </Text>
             </View>
             <View style={styles.menuSeparator} />
-            <TouchableOpacity style={styles.menuItem} onPress={goToSettings}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={goToSettings}
+              accessibilityRole="button"
+              accessibilityLabel="Settings"
+            >
               <SettingsIcon size={16} color={colors.charcoal} />
               <Text style={styles.menuItemText}>Settings</Text>
             </TouchableOpacity>
             <View style={styles.menuSeparator} />
-            <TouchableOpacity style={styles.menuItem} onPress={handleSignOut}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={handleSignOut}
+              accessibilityRole="button"
+              accessibilityLabel="Log out"
+            >
               <LogOut size={16} color={colors.coral} />
               <Text style={[styles.menuItemText, { color: colors.coral }]}>
                 Logout

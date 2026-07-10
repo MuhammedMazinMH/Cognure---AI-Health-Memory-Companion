@@ -11,7 +11,7 @@
 //
 // Sample entities appear when the user has no data yet — same as web.
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Modal,
   Pressable,
@@ -88,8 +88,9 @@ export function MemoryGraph({ entities }: MemoryGraphProps) {
   // Canvas size + view transform (pan/zoom)
   const [canvas, setCanvas] = useState({ width: 0, height: 0 });
   const [transform, setTransform] = useState({ tx: 0, ty: 0, scale: 0.9 });
-  // Gesture-start snapshots
-  const [gestureStart, setGestureStart] = useState({ tx: 0, ty: 0, scale: 0.9 });
+  // Gesture-start snapshot — only read synchronously inside gesture callbacks
+  // and never rendered, so a ref avoids a re-render on every gesture start.
+  const gestureStart = useRef({ tx: 0, ty: 0, scale: 0.9 });
 
   // Fetch interactions on mount — non-fatal, same as web.
   useEffect(() => {
@@ -210,21 +211,25 @@ export function MemoryGraph({ entities }: MemoryGraphProps) {
   // ── Gestures: pan + pinch + tap-to-select ──────────────────────────────────
   const panGesture = Gesture.Pan()
     .runOnJS(true)
-    .onStart(() => setGestureStart(transform))
+    .onStart(() => {
+      gestureStart.current = transform;
+    })
     .onUpdate((e) => {
       setTransform({
-        tx: gestureStart.tx + e.translationX,
-        ty: gestureStart.ty + e.translationY,
-        scale: gestureStart.scale,
+        tx: gestureStart.current.tx + e.translationX,
+        ty: gestureStart.current.ty + e.translationY,
+        scale: gestureStart.current.scale,
       });
     });
 
   const pinchGesture = Gesture.Pinch()
     .runOnJS(true)
-    .onStart(() => setGestureStart(transform))
+    .onStart(() => {
+      gestureStart.current = transform;
+    })
     .onUpdate((e) => {
       // Same zoom bounds as web (minZoom 0.2, maxZoom 1.5).
-      const next = Math.min(1.5, Math.max(0.2, gestureStart.scale * e.scale));
+      const next = Math.min(1.5, Math.max(0.2, gestureStart.current.scale * e.scale));
       setTransform((prev) => ({ ...prev, scale: next }));
     });
 
@@ -274,6 +279,7 @@ export function MemoryGraph({ entities }: MemoryGraphProps) {
       {/* Filter bar — search, chips, count (same as web) */}
       <View style={styles.filterBar}>
         <TextInput
+          accessibilityLabel="Search entities"
           style={styles.search}
           placeholder="Search entities..."
           placeholderTextColor={colors.mutedForeground}
@@ -347,7 +353,14 @@ export function MemoryGraph({ entities }: MemoryGraphProps) {
                   const display =
                     label.length > 16 ? `${label.slice(0, 15)}…` : label;
                   return (
-                    <G key={`node-${i}`} opacity={node.isShadow ? 0.85 : 1}>
+                    <G
+                      key={`node-${i}`}
+                      opacity={node.isShadow ? 0.85 : 1}
+                      accessible
+                      accessibilityLabel={`${node.entity.name}, ${node.entity.type}${
+                        node.hasWarning ? ", has interaction warning" : ""
+                      }`}
+                    >
                       {node.hasWarning && (
                         <Rect
                           x={node.x - NODE_W / 2 - 3}
