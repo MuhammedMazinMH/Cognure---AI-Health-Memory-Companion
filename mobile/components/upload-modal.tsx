@@ -21,7 +21,7 @@ import {
   View,
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
-import { File } from "expo-file-system";
+import * as FileSystem from "expo-file-system";
 import {
   AlertCircle,
   CheckCircle2,
@@ -169,9 +169,16 @@ export function UploadModal({ visible, onClose, onSuccess }: UploadModalProps) {
       try {
         const rememberData = await rememberText(content, documentId);
 
-        setEntityCounts(
-          (rememberData.count as unknown as Record<string, number>) ?? {}
+        // Reduce the returned entities array into a per-type count map so the
+        // success banner can show "Found: 3 medications, 1 diagnosis." etc.
+        const counts = (rememberData.entities ?? []).reduce<Record<string, number>>(
+          (acc, entity) => {
+            acc[entity.type] = (acc[entity.type] ?? 0) + 1;
+            return acc;
+          },
+          {}
         );
+        setEntityCounts(counts);
         setInteractionCount((rememberData.interactions ?? []).length);
         setStatus("done");
         onSuccess?.();
@@ -226,7 +233,9 @@ export function UploadModal({ visible, onClose, onSuccess }: UploadModalProps) {
 
       let extractedText: string | undefined;
       if (isPdf) {
-        const base64 = await new File(asset.uri).base64();
+        const base64 = await FileSystem.readAsStringAsync(asset.uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
         if (!extractorRef.current) {
           throw new Error("PDF reader is not ready yet. Please try again.");
         }

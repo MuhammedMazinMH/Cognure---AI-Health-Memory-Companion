@@ -27,6 +27,13 @@ import type {
 
 const API_URL = process.env.EXPO_PUBLIC_API_URL ?? "";
 
+if (!API_URL && __DEV__) {
+  console.warn(
+    "[Cognure] EXPO_PUBLIC_API_URL is not set. " +
+      "Copy mobile/.env.example to mobile/.env and fill in the values."
+  );
+}
+
 /** Error thrown for any non-2xx API response, carrying the server message. */
 export class ApiError extends Error {
   status: number;

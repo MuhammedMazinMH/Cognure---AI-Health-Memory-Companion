@@ -123,8 +123,7 @@ export default function ChatScreen() {
             <Sparkles size={40} color={colors.sage} />
             <Text style={styles.emptyTitle}>Ask about your health</Text>
             <Text style={styles.emptyBody}>
-              Try &ldquo;What medications am I taking?&rdquo; or
-              &ldquo;Summarize my last visit.&rdquo;
+              {`Try \u201cWhat medications am I taking?\u201d or \u201cSummarize my last visit.\u201d`}
             </Text>
           </View>
         ) : (
