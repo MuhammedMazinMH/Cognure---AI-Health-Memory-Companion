@@ -28,7 +28,9 @@
     "react-native-webview": "13.16.1"
   },
   "devDependencies": {
+    "@babel/core": "^8.0.1",
     "@types/react": "~19.2.2",
+    "babel-preset-expo": "^57.0.2",
     "typescript": "~6.0.3"
   },
   "scripts": {
