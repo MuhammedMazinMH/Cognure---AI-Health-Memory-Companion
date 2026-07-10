@@ -52,7 +52,18 @@ export default function SettingsScreen() {
   }
 
   async function handleLogout() {
-    await getSupabase().auth.signOut();
+    try {
+      const { error } = await getSupabase().auth.signOut();
+      // If the network revoke failed, still clear the local session so no
+      // authenticated state is left behind on the device.
+      if (error) {
+        await getSupabase().auth.signOut({ scope: "local" });
+      }
+    } catch {
+      await getSupabase()
+        .auth.signOut({ scope: "local" })
+        .catch(() => {});
+    }
     router.replace("/login");
   }
 

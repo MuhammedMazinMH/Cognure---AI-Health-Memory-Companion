@@ -1,6 +1,7 @@
 // Small shared UI primitives mirroring the web app's shadcn-styled inputs and
 // buttons (h-11 rounded-xl inputs, sage primary button, coral error banner).
 
+import { useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -10,7 +11,13 @@ import {
   View,
   type TextInputProps,
 } from "react-native";
+import * as Haptics from "expo-haptics";
 import { colors, fonts, radius } from "../lib/theme";
+
+// Focus/blur event types, derived from the installed react-native version so
+// they always match (RN changed these to FocusEvent/BlurEvent).
+type FocusHandler = NonNullable<TextInputProps["onFocus"]>;
+type FocusHandlerEvent = Parameters<FocusHandler>[0];
 
 // ── Labeled input (web: <Label> + <Input className="h-11 rounded-xl …">) ──
 
@@ -18,13 +25,27 @@ interface FieldProps extends TextInputProps {
   label: string;
 }
 
-export function Field({ label, ...inputProps }: FieldProps) {
+export function Field({ label, onFocus, onBlur, ...inputProps }: FieldProps) {
+  const [focused, setFocused] = useState(false);
+
+  const handleFocus = (e: FocusHandlerEvent) => {
+    setFocused(true);
+    onFocus?.(e);
+  };
+  const handleBlur = (e: FocusHandlerEvent) => {
+    setFocused(false);
+    onBlur?.(e);
+  };
+
   return (
     <View style={fieldStyles.wrap}>
       <Text style={fieldStyles.label}>{label}</Text>
       <TextInput
+        accessibilityLabel={label}
         placeholderTextColor={colors.mutedForeground}
-        style={fieldStyles.input}
+        style={[fieldStyles.input, focused && fieldStyles.inputFocused]}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
         {...inputProps}
       />
     </View>
@@ -49,6 +70,12 @@ const fieldStyles = StyleSheet.create({
     fontSize: 15,
     color: colors.charcoal,
   },
+  // Native equivalent of the web's sage focus ring (focus-visible:ring-sage).
+  inputFocused: {
+    borderColor: colors.sage,
+    borderWidth: 2,
+    paddingHorizontal: 13, // compensate for the +1 border so text doesn't shift
+  },
 });
 
 // ── Primary button (web: bg-sage rounded-xl h-11 text-white) ──
@@ -69,10 +96,17 @@ export function PrimaryButton({
   onPress,
 }: PrimaryButtonProps) {
   const isDisabled = disabled || loading;
+
+  const handlePress = () => {
+    // Light impact on primary actions — the native feedback users expect.
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+    onPress();
+  };
+
   return (
     <Pressable
       accessibilityRole="button"
-      onPress={onPress}
+      onPress={handlePress}
       disabled={isDisabled}
       style={({ pressed }) => [
         buttonStyles.base,

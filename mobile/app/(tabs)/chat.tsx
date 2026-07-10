@@ -160,6 +160,8 @@ export default function ChatScreen() {
             multiline={false}
             returnKeyType="send"
             onSubmitEditing={handleSend}
+            blurOnSubmit={false}
+            accessibilityLabel="Ask Cognure about your health"
           />
           <TouchableOpacity
             style={[styles.sendButton, !canSend && styles.sendButtonDisabled]}
