@@ -60,8 +60,7 @@ export default function DocumentsScreen() {
         <View style={styles.empty}>
           <Text style={styles.emptyTitle}>No documents yet</Text>
           <Text style={styles.emptyBody}>
-            Tap &ldquo;Add Memory&rdquo; above to upload your first health
-            document — Cognure will read it and remember it for you.
+            {`Tap \u201cAdd Memory\u201d above to upload your first health document \u2014 Cognure will read it and remember it for you.`}
           </Text>
         </View>
       ) : (
