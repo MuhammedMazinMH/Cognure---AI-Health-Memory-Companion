@@ -1,366 +1,288 @@
-# Cognure — AI-Powered Health Memory Companion
+# Cognure
 
-Turn your scattered medical records into a **living, intelligent memory graph**. Upload PDFs or documents, and Cognure reads them, extracts key health facts, remembers them, and lets you ask natural language questions grounded entirely in your own medical history.
+**AI-Powered Health Memory Companion**
 
-**Never lose track of your health story again.**
+Turn your scattered medical records into a living, intelligent memory graph. Upload a PDF or text document, and Cognure reads it, extracts key health facts, stores them in a semantic memory network, and lets you ask natural language questions grounded entirely in your own medical history.
 
----
-
-## 🎯 What Cognure Does
-
-Cognure transforms the chaos of medical paperwork into an organized, searchable knowledge base powered by AI:
-
-- **Upload documents** — PDFs, text files, medical records
-- **Auto-extract facts** — medications, symptoms, diagnoses, procedures, providers, dates
-- **Build a memory graph** — visual, interactive network of your health timeline
-- **Ask questions** — "What medications am I on?", "When did my back pain start?", "Which doctors have I seen?"
-- **Get grounded answers** — responses are pulled **only** from your own records, never hallucinated
-- **Track trends** — see symptom confidence scores over time; identify patterns of improvement or worsening
-- **Generate reports** — printable PDF health summaries for doctors, specialists, or personal records
+> Your health story deserves to be remembered. Cognure helps you own it.
 
 ---
 
-## ✨ Core Features
+## Overview
 
-### 🧠 Memory Graph
-An interactive React Flow visualization of your entire health network, color-coded by entity type:
-- **Medications** (sage green) — all drugs you've taken, dosages, interactions flagged in real-time
-- **Symptoms** (lavender) — tracked with confidence scores; low-confidence mentions appear as faint "shadow" nodes
-- **Diagnoses** (coral) — conditions, dates, and context
-- **Procedures** (sky blue) — surgeries, tests, treatments
-- **Providers** (muted gold) — doctors, specialists, clinics
+Most people carry their health history in a pile of PDFs, printouts, and half-remembered conversations with doctors. Cognure solves this by treating every document you upload as a memory — structured, searchable, and always available through a conversational interface.
 
-Click any node to see full details. Medication interaction warnings appear with red highlights and detailed severity information.
-
-### 💬 Chat with Your Health History
-A private AI assistant that **only** answers from your memories:
-- Natural language questions in plain English
-- Answers grounded exclusively in your uploaded documents
-- No external web search, no guessing — pure data from your records
-- Full conversation history for reference
-
-### 📅 Health Timeline
-Chronological view of all your health events, grouped by month:
-- Browse memories in order
-- See confidence scores for each entity
-- View associated documents and dates
-- Symptom trend sparklines showing improvement/decline patterns
-
-### 📊 Symptom Trends
-Visual tracking of symptom mentions across all documents:
-- Mini-charts showing confidence over time
-- Automatic classification: "Worsening", "Improving", or "Stable"
-- Based on confidence delta between earliest and latest mention
-- Identify health patterns at a glance
-
-### 📄 PDF Health Reports
-Generate professional, printable PDF reports of your health summary:
-- Patient demographics
-- Current medications with interactions
-- Known diagnoses and procedures
-- Recent health facts extracted from documents
-- Perfect for bringing to new doctors or keeping in personal records
-
-### 📁 Documents Hub
-Centralized library of all uploaded files:
-- Browse uploaded PDFs and text files
-- See upload dates and extraction status
-- Direct access to your source documents
-
-### ⚙️ Settings
-Manage your account and privacy:
-- Profile management
-- Sign out securely
-- Privacy by design — your data never leaves your Supabase instance
+There is no hallucination, no external web search, no guessing. Every answer the AI gives is pulled directly from your own records.
 
 ---
 
-## 🏗️ Tech Stack
+## Features
 
-| Layer           | Technology                                     |
-| --------------- | ---------------------------------------------- |
-| **Frontend**    | Next.js 16 (App Router, React 19, TypeScript) |
-| **Styling**     | Tailwind CSS v4, shadcn/ui components          |
-| **Auth & Data** | Supabase (PostgreSQL, Auth, Row Level Security)|
-| **Storage**     | Supabase Storage (encrypted, private buckets)  |
-| **Memory API**  | Cognee Cloud REST API                          |
-| **AI Engine**   | Groq API (`llama-3.3-70b-versatile`)           |
-| **Graph Viz**   | React Flow with custom node styling            |
-| **PDF Parsing** | pdfjs-dist (client-side, no server parsing)    |
-| **Charts**      | Recharts (sparklines, trend visualization)     |
-| **UI Icons**    | lucide-react                                   |
+### Memory Graph
+An interactive visualization of your entire health network. Every entity extracted from your documents — medications, symptoms, diagnoses, procedures, and providers — becomes a node. Edges represent relationships. Color-coding distinguishes entity types at a glance. Low-confidence mentions appear as faint shadow nodes. Medication interaction warnings are flagged in real time with severity details.
 
-**Why this stack?** Next.js + Supabase gives us real-time sync and RLS security. Cognee handles semantic memory; Groq provides fast, local-first AI inference. React Flow lets users visually explore their health graph. Everything is privacy-first — your data stays in your Supabase instance.
+### AI Chat
+A private assistant that only answers from your memories. Ask anything in plain English — "What medications am I on?", "When did my back pain start?", "Which specialists have I seen?" — and receive answers grounded exclusively in your uploaded documents, with source citations.
 
----
+### Health Timeline
+A chronological journal of every health event extracted from your documents. Grouped by month, with confidence scores, document references, and symptom trend sparklines showing patterns of improvement or decline over time.
 
-## 🔐 Privacy & Security
+### Symptom Trends
+Visual tracking of how symptoms evolve across your document history. Mini-charts show confidence over time. Each symptom is automatically classified as Worsening, Improving, or Stable based on the delta between earliest and latest mention.
 
-- **Row Level Security (RLS)** — Supabase RLS policies ensure users can only access their own data
-- **End-to-end encrypted storage** — Documents stored in encrypted Supabase buckets
-- **No data selling** — Cognure never uses your health data to train models or improve products
-- **Open source** — Full code transparency; run it yourself
-- **Private by design** — Local processing where possible (PDF extraction happens in browser)
+### PDF Health Reports
+Generate a printable, professional PDF summary of your health record on demand — current medications with interactions, known diagnoses, recent procedures, and extracted facts. Designed for bringing to a new specialist or keeping in your own records.
+
+### Documents Hub
+A centralized library of every file you have uploaded, with upload dates, extraction status, and direct access to source documents.
 
 ---
 
-## 🚀 Getting Started
+## Tech Stack
+
+### Web Application
+
+| Layer | Technology |
+| --- | --- |
+| Framework | Next.js 16 (App Router, React 19, TypeScript) |
+| Styling | Tailwind CSS v4, shadcn/ui |
+| Auth & Database | Supabase (PostgreSQL, Auth, Row Level Security) |
+| File Storage | Supabase Storage (encrypted, private buckets) |
+| Memory Engine | Cognee Cloud REST API |
+| AI / LLM | Groq API — `llama-3.3-70b-versatile` |
+| Graph Visualization | React Flow with custom node styling |
+| PDF Parsing | pdfjs-dist (client-side, no server parsing) |
+| Charts | Recharts (sparklines, trend visualization) |
+| Icons | lucide-react |
+| Deployment | Vercel |
+
+### Mobile Application (In Progress)
+
+| Layer | Technology |
+| --- | --- |
+| Framework | Expo SDK 57 (React Native 0.86, TypeScript) |
+| Navigation | Expo Router (file-based, tab + stack) |
+| Auth & Database | Supabase (same backend as web) |
+| Gestures | react-native-gesture-handler + react-native-reanimated |
+| Graph Visualization | react-native-svg (pan / pinch gesture navigation) |
+| PDF Export | expo-print + expo-sharing |
+| Fonts | Playfair Display + Inter via @expo-google-fonts |
+| Icons | lucide-react-native |
+
+---
+
+## Privacy and Security
+
+- **Row Level Security** — Supabase RLS policies ensure users can only ever read their own data, enforced at the database level.
+- **Encrypted storage** — All uploaded documents are stored in private, encrypted Supabase buckets.
+- **No training data** — Your health records are never used to train models or improve any third-party product.
+- **Client-side PDF extraction** — PDF text is extracted in the browser using pdfjs-dist. The raw file never touches the server.
+- **Open source** — Full code transparency. Self-host it if you prefer.
+
+---
+
+## Getting Started
 
 ### Prerequisites
 
-- Node.js 18+ and npm
-- A Supabase project (free tier works great)
-- Groq API key (free: [groq.com](https://groq.com))
-- Cognee Cloud API credentials (sign up at [cognee.io](https://cognee.io))
+- Node.js 18 or later
+- A Supabase project (the free tier is sufficient)
+- A Groq API key — [groq.com](https://groq.com)
+- Cognee Cloud API credentials — [cognee.io](https://cognee.io)
 
-### 1. Clone & Install
+### 1. Clone and install
 
 ```bash
-git clone <this-repo>
-cd cognure
+git clone https://github.com/MuhammedMazinMH/Cognure---AI-Health-Memory-Companion.git
+cd Cognure---AI-Health-Memory-Companion
 npm install
 ```
 
-### 2. Set Up Environment Variables
+### 2. Configure environment variables
 
 Create `.env.local` in the project root:
 
 ```env
-# Supabase (public — safe to expose)
-NEXT_PUBLIC_SUPABASE_URL=https://xxxxx.supabase.co
+# Supabase — safe to expose in the browser
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGc...
 
-# Groq (server-only secret)
+# Groq — server-only secret
 GROQ_API_KEY=gsk_...
 
-# Cognee (server-only secret)
+# Cognee — server-only secret
 COGNEE_API_KEY=...
 COGNEE_BASE_URL=https://api.cognee.io/v1
 ```
 
-### 3. Initialize the Database
+### 3. Initialize the database
 
-1. Open your Supabase Dashboard → **SQL Editor**
-2. Copy the entire contents of [`supabase-schema.sql`](./supabase-schema.sql)
-3. Paste and execute in the SQL editor
-4. This creates:
-   - `documents` table — tracks uploaded files
-   - `memories` table — stores extracted health facts
-   - `medication_interactions` table — logs drug-drug interaction warnings
-   - `documents` storage bucket — encrypted file storage
-   - RLS policies — ensures data isolation per user
+1. Open your Supabase Dashboard and go to the SQL Editor.
+2. Copy the contents of `supabase-schema.sql` from this repository.
+3. Paste and run it. This creates the `documents`, `memories`, and `medication_interactions` tables, the `documents` storage bucket, and all RLS policies.
 
-### 4. Run the Dev Server
+### 4. Start the development server
 
 ```bash
 npm run dev
 ```
 
-Open <http://localhost:3000> in your browser.
+Open [http://localhost:3000](http://localhost:3000).
 
 ---
 
-## 📖 How It Works
+## How It Works
 
-### Upload → Extract → Remember → Ask
+**Upload** — The user selects a PDF or text file. pdfjs-dist extracts the raw text on the client. The file is stored in Supabase Storage and its metadata written to the `documents` table.
 
-1. **Upload** (`/api/upload`)
-   - User picks a PDF or text file
-   - Client-side: pdfjs-dist extracts raw text from PDF (no server parsing needed)
-   - File stored in Supabase Storage; metadata saved to `documents` table
+**Remember** — The extracted text is sent to `/api/remember`. Cognee ingests it into the semantic memory network. Groq parses it for structured health entities — medications, symptoms, diagnoses, procedures, providers — with confidence scores. Results are saved to the `memories` table. Any medication interactions are detected and logged.
 
-2. **Remember** (`/api/remember`)
-   - Cognee `cogneeRemember()` ingests the text into the semantic memory network
-   - Groq extracts structured entities (medications, symptoms, etc.) with confidence scores
-   - Results auto-saved to `memories` table
-   - Medication interactions checked; any warnings logged to `medication_interactions`
+**Ask** — The user sends a question to `/api/ask`. Cognee recalls relevant memories. Groq generates an answer grounded only in the retrieved context. If Cognee returns nothing, the system falls back to keyword search over the `memories` table.
 
-3. **Chat / Ask** (`/api/ask`)
-   - Cognee `cogneeRecall()` retrieves relevant memories matching the user's question
-   - Fallback: keyword-based search of `memories` table if Cognee returns no results
-   - Groq generates an answer grounded **only** in the retrieved context
-   - Answer displayed with memory source citations
-
-4. **Trends & Reports**
-   - Timeline page groups memories chronologically, shows symptom trends
-   - Report page generates a formatted, printable PDF summary
-   - Graph page visualizes all entities and their relationships
+**Explore** — The Timeline, Graph, Trends, and Report pages query the same `memories` table and present the data in different visual formats.
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```
-src/
-├── app/
-│   ├── (auth)/                    # Login & signup pages
-│   │   ├── login/page.tsx
-│   │   └── signup/page.tsx
-│   │
-│   ├── dashboard/                 # Main app shell & protected routes
-│   │   ├── layout.tsx             # Sidebar + header
-│   │   ├── page.tsx               # Memory graph (home)
-│   │   ├── chat/page.tsx          # AI chat interface
-│   │   ├── timeline/page.tsx      # Chronological memory journal
-│   │   ├── documents/page.tsx     # File library
-│   │   ├── report/page.tsx        # PDF health report generator
-│   │   └── settings/page.tsx      # Profile & preferences
-│   │
-│   ├── api/                       # Server routes
-│   │   ├── upload/route.ts        # File upload & storage
-│   │   ├── remember/route.ts      # Cognee integration, entity extraction
-│   │   ├── ask/route.ts           # Chat with memory recall
-│   │   ├── interactions/route.ts  # Fetch medication interactions
-│   │   └── memories/route.ts      # List & filter memories
-│   │
-│   ├── globals.css                # Design tokens, font setup
-│   ├── layout.tsx                 # Root layout
-│   └── page.tsx                   # Public landing page
+.
+├── src/
+│   ├── app/
+│   │   ├── (auth)/                  # Login and signup pages
+│   │   ├── dashboard/               # Protected app shell
+│   │   │   ├── layout.tsx           # Sidebar and header
+│   │   │   ├── page.tsx             # Memory graph
+│   │   │   ├── chat/page.tsx        # AI chat
+│   │   │   ├── timeline/page.tsx    # Chronological journal
+│   │   │   ├── documents/page.tsx   # File library
+│   │   │   ├── report/page.tsx      # PDF report generator
+│   │   │   └── settings/page.tsx    # Profile and preferences
+│   │   └── api/
+│   │       ├── upload/route.ts      # File upload and storage
+│   │       ├── remember/route.ts    # Cognee ingestion and entity extraction
+│   │       ├── ask/route.ts         # Chat with memory recall
+│   │       ├── interactions/route.ts
+│   │       └── memories/route.ts
+│   ├── components/
+│   │   ├── memory-graph.tsx
+│   │   ├── health-timeline.tsx
+│   │   ├── symptom-trends.tsx
+│   │   ├── upload-modal.tsx
+│   │   └── ui/                      # shadcn/ui components
+│   ├── lib/
+│   │   ├── supabase-client.ts
+│   │   ├── cognee-client.ts
+│   │   ├── groq-client.ts
+│   │   └── utils.ts
+│   └── types/index.ts
 │
-├── components/
-│   ├── sidebar.tsx                # Navigation menu
-│   ├── header.tsx                 # User profile, upload button
-│   ├── memory-graph.tsx           # React Flow graph visualization
-│   ├── health-timeline.tsx        # Timeline component
-│   ├── symptom-trends.tsx         # Sparkline charts
-│   ├── upload-modal.tsx           # File upload flow
-│   ├── medical-background.tsx     # Animated landing page background
-│   └── ui/                        # shadcn/ui components
-│       ├── button.tsx
-│       ├── input.tsx
-│       ├── dialog.tsx
-│       ├── dropdown-menu.tsx
-│       └── ...
-│
-├── lib/
-│   ├── supabase-client.ts         # Supabase client initialization
-│   ├── cognee-client.ts           # Cognee REST API wrapper
-│   ├── groq-client.ts             # Groq API wrapper (entity extraction, answers)
-│   ├── pdf-extract.ts             # Client-side PDF text extraction
-│   ├── utils.ts                   # Utility helpers
-│   └── pdf-polyfill.ts            # Browser polyfills for PDF.js
-│
-├── types/
-│   └── index.ts                   # TypeScript interfaces (Memory, HealthEntity, etc.)
-│
-└── public/
-    └── pdfjs/
-        └── pdf.worker.min.mjs     # PDF.js worker file
+└── mobile/                          # Expo mobile application (in progress)
+    ├── app/
+    │   ├── _layout.tsx              # Root layout, font loading, session provider
+    │   ├── (auth)/                  # Login and signup screens
+    │   └── (tabs)/                  # Tab navigator
+    │       ├── index.tsx            # Memory graph
+    │       ├── chat.tsx             # AI chat
+    │       ├── timeline.tsx         # Health timeline
+    │       ├── documents.tsx        # Documents hub
+    │       └── report.tsx           # PDF report
+    ├── components/
+    ├── lib/
+    │   ├── api.ts                   # Typed REST client for the web API
+    │   ├── supabase.ts
+    │   ├── session.tsx
+    │   └── theme.ts
+    └── app.json
 ```
 
 ---
 
-## 🔧 Configuration
+## Deployment
 
-### Adjusting Cognee API Endpoints
+### Vercel (recommended)
 
-The Cognee paths in [`src/lib/cognee-client.ts`](./src/lib/cognee-client.ts) are placeholders. Cross-reference with Cognee's official documentation and update:
+1. Push the repository to GitHub.
+2. Import the project on [vercel.com](https://vercel.com).
+3. Add the four environment variables in the Vercel project settings.
+4. Deploy. Every push to `main` redeploys automatically.
 
-```typescript
-// Example: adjust these to match your Cognee Cloud docs
-const COGNEE_PATHS = {
-  remember: "/add",         // POST /add
-  recall: "/cognify",       // GET /cognify
-  // ... etc
-};
-```
-
-### Customizing Entity Types
-
-Edit `src/types/index.ts` to add new health entity types (allergies, lab results, etc.):
-
-```typescript
-export type HealthEntityType = 
-  | "medication" 
-  | "symptom" 
-  | "diagnosis" 
-  | "procedure" 
-  | "provider"
-  | "allergy"  // ← add new types here
-```
-
-Then update the extraction prompt in `groq-client.ts` to recognize these new types.
-
----
-
-## 🚢 Deployment
-
-### Deploy to Vercel (Recommended)
-
-1. Push your repo to GitHub
-2. Go to [vercel.com](https://vercel.com), sign in, and click **New Project**
-3. Import your GitHub repo
-4. Add environment variables (Supabase, Groq, Cognee keys)
-5. Deploy
-
-The project will auto-build and deploy on every push to `main`.
-
-### Self-Hosted (Docker)
+### Self-hosted
 
 ```bash
 npm run build
+npm start
+```
+
+Or with Docker:
+
+```bash
 docker build -t cognure .
-docker run -e NEXT_PUBLIC_SUPABASE_URL=... -p 3000:3000 cognure
+docker run -p 3000:3000 --env-file .env.local cognure
 ```
 
 ---
 
-## 📊 Key Metrics
+## Mobile Application
 
-- **Extraction accuracy** — Groq extracts entities with >90% precision on real medical records
-- **Response latency** — Chat answers in <2s (Groq inference, Cognee recall)
-- **Memory retention** — Cognee stores unlimited memories; UI optimized for 1000+ entities
-- **File support** — PDFs, TXT, with extensible parsing (add DOCX, images, etc.)
+A native mobile application for iOS and Android is currently in active development using Expo SDK 57 and React Native. It connects to the same Supabase backend and REST API as the web application, giving full feature parity across platforms.
 
----
+The mobile app includes all five core screens — Memory Graph, Chat, Timeline, Documents, and Report — built with native gestures, haptic feedback, and an interface that follows platform conventions on both iOS and Android.
 
-## 🤝 Contributing
+It has not yet been released. A public beta is planned once the Expo EAS build pipeline and App Store / Play Store submission are complete.
 
-This is a fully open-source project. We welcome contributions:
+If you would like to run it locally in the meantime:
 
-1. Fork the repo
-2. Create a feature branch (`git checkout -b feature/your-idea`)
-3. Make your changes (with comments)
-4. Submit a pull request
+```bash
+cd mobile
+cp .env.example .env
+# Fill in EXPO_PUBLIC_SUPABASE_URL, EXPO_PUBLIC_SUPABASE_ANON_KEY, EXPO_PUBLIC_API_URL
+npm install
+npx expo start
+```
 
----
-
-## 📝 License
-
-MIT License — feel free to use, modify, and share.
+Scan the QR code with the Expo Go app on your device.
 
 ---
 
-## 🙏 Acknowledgments
+## Roadmap
 
-Built with:
-- [Cognee](https://cognee.io) — semantic memory as a service
-- [Groq](https://groq.com) — lightning-fast LLM inference
-- [Supabase](https://supabase.io) — open-source Firebase alternative
-- [Vercel](https://vercel.com) — edge computing & deployment
-- The React, Next.js, and open-source communities
-
----
-
-## 💡 What's Next?
-
-Planned features:
-- **Multi-user sharing** — securely share health records with family/caregivers (with read-only access)
-- **Voice input** — dictate health updates hands-free
-- **Integration with EHR systems** — direct import from hospital/clinic systems
-- **Wearable sync** — automatic ingestion from Apple Health, Google Fit, Fitbit
-- **Advanced analytics** — predictive health insights based on trends
-- **Export to FHIR** — standard healthcare data format for interoperability
+- Mobile app public beta (iOS and Android)
+- Multi-user sharing — share records with family members or caregivers with read-only access
+- Voice input — dictate health updates hands-free
+- EHR integration — direct import from hospital and clinic systems
+- Wearable sync — automatic ingestion from Apple Health and Google Fit
+- FHIR export — standard healthcare data format for interoperability
+- Advanced analytics — predictive health insights based on long-term trends
 
 ---
 
-## 🆘 Support & Questions
+## Contributing
 
-- **Documentation** — see [docs/](./docs) folder (if present)
-- **Issues** — report bugs on GitHub Issues
-- **Discussions** — start a discussion for feature requests or ideas
-- **Email** — contact via [support@cognure.ai](mailto:support@cognure.ai) (if available)
+Contributions are welcome.
+
+1. Fork the repository.
+2. Create a feature branch: `git checkout -b feature/your-idea`
+3. Commit your changes with a clear message.
+4. Open a pull request against `main`.
+
+Please keep pull requests focused. One feature or fix per PR.
 
 ---
 
-**Your health story deserves to be remembered. Let Cognure help you own it.**
+## License
+
+MIT License. Free to use, modify, and distribute.
+
+---
+
+## Acknowledgments
+
+Cognure is built on the shoulders of excellent open-source and cloud projects:
+
+- [Cognee](https://cognee.io) — semantic memory infrastructure
+- [Groq](https://groq.com) — fast LLM inference
+- [Supabase](https://supabase.com) — open-source database and auth
+- [Expo](https://expo.dev) — React Native toolchain
+- [Vercel](https://vercel.com) — deployment and edge infrastructure
+- The React, Next.js, and React Native communities
